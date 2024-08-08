@@ -223,25 +223,22 @@ int main(int argc, char **argv) {
 
 	///// ----- EXECUTION TEST ----- /////
 	/// 1. Assembling the path_dir/code.uxntal file in path_dir/code.rom
-	/// 2. Executing the path_dir/code.rom
-	/// and put the output to path_dir/output_result
+	/// 2. Executing path_dir/code.rom, put output in path_dir/output_result
 	/// 3. Compare file path_dir/output_expected and path_dir/output_result
 
 	char command[100];
-	// Command to assemble the unxntal code generated
+
+	/// 1. Assembling the path_dir/code.uxntal file in path_dir/code.rom
 	sprintf(command, "uxnasm %s/code.uxntal %s/code.rom > %s/uxnasm_result",
 		path_dir, path_dir, path_dir);
-	// printf("\nuxnasm %s/code.uxntal %s/code.rom\n", path_dir, path_dir);
 	system(command);
 
-	// Command to execute the code assembled and get the output in
-	// output_expected
+	/// 2. Executing path_dir/code.rom, put output in path_dir/output_result
 	sprintf(command, "uxncli %s/code.rom > %s/output_result", path_dir,
 		path_dir);
-	// printf("\nuxncli %s/code.rom > %s/output_result\n", path_dir,
-	// path_dir);
 	system(command);
 
+	/// 3. Compare file path_dir/output_expected and path_dir/output_result
 	sprintf(path_result, "%s/output_result", path_dir);
 	sprintf(path_expected, "%s/output_expected", path_dir);
 
@@ -273,9 +270,6 @@ int main(int argc, char **argv) {
 	reset();
 	fflush(stdout);
 
-	// Free everything
-	// ast_free(ast);
-	// ast_free(ast_2);
 	uxn_program_delete(uxn_program);
 	return 0;
 }

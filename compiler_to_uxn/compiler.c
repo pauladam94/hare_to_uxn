@@ -245,8 +245,12 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		fprintf(error, "function call todo\n");
 		break;
 	}
-	case CHAR_LITERAL: {
-
+	case CHAR_LITERAL_E: {
+		UxnPartialProgram *number = empty_partial_program();
+		append_instruction(number, NULL, true, LIT);
+		append_instruction(number, "char literal", false, expr->char_literal.c);
+		return number;
+		fprintf(error, "char_literal call todo\n");
 		break;
 	}
 	}

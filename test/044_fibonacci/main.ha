@@ -1,0 +1,17 @@
+fn main() void = {
+	let output = 0x18;
+	*output = fibo(6);
+	*output = 10; // end of line
+};
+
+fn fibo(a : i16) : i16 {
+	if (a == 0) {
+		return 1;
+	} else {
+		if (a == 1) {
+			return 1;
+		} else {
+			return fibo(a - 1) + fibo(a - 2);
+		};
+	};
+};

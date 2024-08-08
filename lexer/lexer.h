@@ -6,7 +6,7 @@ typedef enum {
 	IDENTIFIER, // a2 - ab_cd - x - ...
 	NUMBER,	    // 234 - 1 - 0172 - ...
 	SYMBOL,	    // == - ; - { - ...
-	STRING_LITERAL,
+	CHAR_LITERAL,
 
 	// SYMBOLS
 	COLON,	   // :
@@ -19,19 +19,19 @@ typedef enum {
 	LPAREN,	   // (
 	RPAREN,	   // )
 
-	FN,	// 'fn'
-	LET,	// 'let'
-	EQUAL,	// '='
-	RETURN, // 'return'
+	FN,	// fn
+	LET,	// let
+	EQUAL,	// =
+	RETURN, // return
 
 	VOID, // void
 	U8,   // u8
 	U16,  // u16
 
-	PLUS,	// '+'
-	MINUS,	// '-'
-	MULT,	// '*'
-	DIVIDE, // '/'
+	PLUS,	// +
+	MINUS,	// -
+	MULT,	// *
+	DIVIDE, // /
 	
 	SINGLE_QUOTE, // '
 } TokenType;

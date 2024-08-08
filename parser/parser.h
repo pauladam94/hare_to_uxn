@@ -68,7 +68,7 @@ typedef struct Expression {
 		NUMBER_E,
 		RETURN_E,
 		FUNCTION_CALL_E,
-		CHAR_LITERAL,
+		CHAR_LITERAL_E,
 	} tag;
 } Expression;
 

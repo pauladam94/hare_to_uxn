@@ -1,5 +1,4 @@
 # Compiler Hare to UXN
-
 This project has pedagogical purpose.
 
 The book associated to this project is [here](https://pauladam94.github.io/compiler_lua_uxn).
@@ -8,10 +7,9 @@ The book associated to this project is [here](https://pauladam94.github.io/compi
 - UXN is a stack machine
 
 ## Trouble Shoutting
-
 - make can be not recent enough for certain variable maybe
 
-## Programs Needed (Dependencies) :
+## Programs Needed (Dependencies)
 - make : build system
 - time : can be removed in the `Makefile`
 - C compiler (clang or GCC ...)
@@ -19,13 +17,14 @@ The book associated to this project is [here](https://pauladam94.github.io/compi
     - the C compiler can be changed in `Makefile`
 
 ## Run Uxn code compiled
-Need for :
+Need of this commands to be accessible :
 - `uxnasm` a Uxn assembleur of uxn code generated
 - `uxncli` a Uxn cli emulator for uxn assembly (for testing and cli application)
 - `uxnemu` a Uxn graphical emulator for uxn assembly
 
 ### On the web:
-- [Here is](https://metasyn.srht.site/learn-uxn/) a playground of uxn.
+- [Here is](https://metasyn.srht.site/learn-uxn/) a playground of the uxntal
+language.
 
 ### On NixOs
 Install the `uxn` package to have those 3 binaries accessible. The makefile uses
@@ -37,11 +36,10 @@ repository. You either have to put them in our path so that `uxnasm` and
 `uxncli` are accessible for the make file. You can also change the command in
 the makefile.
 
-# How to count the number of C line
+# Count the number of line of code
 To check the number of C line code `git ls-files '*.c' '*.h' | xargs wc -l`.
 
 # TODO
-
 - put 'FILE* error' always at the same place in every function (probably first)
 - parse hexa number
 - convert during parsing number string to real numbers

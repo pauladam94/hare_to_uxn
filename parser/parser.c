@@ -57,7 +57,7 @@ void expression_delete(Expression *expr) {
 		free(expr->function_call.name);
 		break;
 	}
-	case CHAR_LITERAL: {
+	case CHAR_LITERAL_E: {
 		break;
 	}
 	}
@@ -111,7 +111,7 @@ void expression_not_tokens_delete(Expression *expr) {
 	case FUNCTION_CALL_E: {
 		break;
 	}
-	case CHAR_LITERAL: {
+	case CHAR_LITERAL_E: {
 		break;
 	}
 	}
@@ -240,7 +240,7 @@ void fprintf_expression(FILE *file, Expression *expr) {
 		fprintf(file, "%s()", expr->function_call.name);
 		break;
 	}
-	case CHAR_LITERAL: {
+	case CHAR_LITERAL_E: {
 		fprintf(file, "'%c'", expr->char_literal.c);
 		break;
 	}
@@ -265,7 +265,7 @@ void fprintf_ast(FILE *file, Ast *ast) {
 	}
 }
 
-/// CAN PARSE FUNCTIONS API
+/// PARSE FUNCTIONS API
 ///
 /// bool parse_[name] (Tokens *tokens, uint32_t *index, [Name]* [name],
 ///                        FILE* error, bool should_work);
@@ -378,7 +378,6 @@ bool parse_number(Tokens *tokens, uint32_t *index, Expression *e, FILE *error,
 			return true;
 		} else {
 			index--;
-
 		}
 	}
 
@@ -410,6 +409,17 @@ bool parse_number(Tokens *tokens, uint32_t *index, Expression *e, FILE *error,
 	return false;
 }
 
+bool parse_char_literal(Tokens *tokens, uint32_t *index, Expression *expr,
+			FILE *error, bool should_work) {
+	if (tokens->tokens[*index].type == CHAR_LITERAL) {
+		expr->tag = CHAR_LITERAL_E;
+		expr->char_literal.c = tokens->tokens[*index].text[0];
+		*index += 1;
+		return true;
+	}
+	return false;
+}
+
 // TODO
 bool parse_args_call(FILE *error);
 // TODO
@@ -431,16 +441,8 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	Expression *e2;
 
 	// Trying to parse : 'char'
-	char *c;
-	if (parse_token_type(tokens, i, SINGLE_QUOTE, error, false) &&
-	    parse_identifier(tokens, i, &c, error, true && should_work) &&
-	    parse_token_type(tokens, i, SINGLE_QUOTE, error, false)) {
-		if (strlen(c) == 1) {
-			expr->tag = CHAR_LITERAL;
-			expr->char_literal.c = c[0];
-			free(c);
-			return true;
-		}
+	if (parse_char_literal(tokens, i, expr, error, true && should_work)) {
+		return true;
 	}
 	// Trying to parse :let var = e
 	prev_index = *i;
