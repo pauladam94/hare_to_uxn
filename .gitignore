@@ -1,0 +1,9 @@
+docs
+
+
+test/*/*result
+test/*/*rom
+test/*/*sym
+test/*/*uxntal
+test/*/error
+bin

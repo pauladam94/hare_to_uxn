@@ -1,0 +1,7 @@
+fn main() void = {
+	main();
+};
+
+fn test() u8 = {
+	12;
+};

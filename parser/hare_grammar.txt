@@ -1,0 +1,149 @@
+Simplified version of the Hare grammar
+
+---
+'abc' : literally the text abc, a terminal
+abc : abc name of a one the rule
+[abc] : optional abc
+(abc)* : 0 or more abc
+(abc)+ : 1 or more abc
+... : list of things that can be induced by the reader
+(abc | def) : abc or def rule
+---
+
+----- Simple Version -----
+
+identifier ::= (letter | '_') (number | letter | '_')*
+letter ::= a | .. | z | A | .. | Z
+number ::= 1 | .. | 9
+
+function_declaration ::= 'fn' identifier prototype '{' expression '}'
+
+expresssion ::= expression_1 [';' expression]
+
+expression_1 ::=
+	expression_2 ['+' expression];
+	| expression_2 ['-' expression];
+
+expression_2 ::=
+	'let' identifier '=' expression ';' expression
+	| identifier '=' expression
+	| identifier '(' ')'
+
+----- Complete Version -----
+
+identifier ::= (letter | '_') (number | letter | '_')*
+letter ::= a | .. | z | A | .. | Z
+number ::= 1 | .. | 9
+
+function_declaration ::= 
+	'fn' identifier prototype
+	'fn' identifier prototype expression
+
+expression ::=
+	logical_or_expression
+	(* ... other *)
+
+logical_or_expression ::=
+	logical_xor_expression
+	| logical_or_expression '||' logical_xor_expression
+
+logical_xor_expression ::=
+	logical_and_expression
+	| logical_xor_expression '^^' logical_and_expression
+
+logical_and_expression ::=
+	equality_expression
+	| logical_and_expression '&&' equality_expression
+
+equality-expression ::=
+	comparison-expression
+	| equality-expression '==' comparison-expression
+	| equality-expression '!=' comparison-expression
+
+comparison-expression ::=
+	inclusive-or-expression
+	| comparison-expression '<' inclusive-or-expression
+	| comparison-expression '>' inclusive-or-expression
+	| comparison-expression '<=' inclusive-or-expression
+	| comparison-expression '>=' inclusive-or-expression
+
+inclusive-or-expression ::=
+	exclusive-or-expression
+	| inclusive-or-expression '|' exclusive-or-expression
+
+exclusive-or-expression ::=
+	and-expression
+	| exclusive-or-expression 'ˆ' and-expression
+
+and-expression ::=
+	shift-expression
+	| and-expression '&' shift-expression
+
+shift-expression ::=
+	additive-expression
+	| shift-expression '<<' additive-expression
+	| shift-expression '>>' additive-expression
+
+additive-expression ::=
+	multiplicative-expression
+	| additive-expression '+' multiplicative-expression
+	| additive-expression '-' multiplicative-expression
+
+multiplicative-expression ::=
+	cast-expression
+	| multiplicative-expression '*' cast-expression
+	| multiplicative-expression '/' cast-expression
+	| multiplicative-expression '%' cast-expression
+
+nullable-type ::=
+	type
+	'null'
+
+cast-expression ::=
+	type
+	| cast-expression 'as' nullable-type
+	| cast-expression 'is' nullable-type
+
+unary-expression ::=
+	builtin-expression
+	| compound-expression
+	| match-expression
+	| switch-expression
+	| unary-operator unary-expression
+
+unary-operator ::= '-' | '~' | '!' | '*' | '&'
+
+cast-expression ::= unary-expression
+
+compound-expression ::= [label] '{' expression-list '}'
+
+expression-list ::=
+	expression ';' [expression-list]
+	| binding-list ';' [expression-list]
+	| defer-expression ';' [expression-list]
+
+type ::= ['const'] ['!'] storage-class
+
+storage-class ::=
+	primitive-type
+	| pointer-type
+	| struct-union-type
+	| tuple-type
+	| tagged-union-type
+	| slice-array-type
+	| function-type
+	| alias-type
+	| unwrapped-alias
+
+primitive-type ::=
+	integer-type
+	| floating-type
+	| 'bool'
+	| 'done'
+	| 'never'
+	| 'opaque'
+	| 'rune'
+	| 'str'
+	| 'valist'
+	| 'void'
+

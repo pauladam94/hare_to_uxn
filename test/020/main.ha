@@ -1,0 +1,7 @@
+fn main() void = {
+	let a = foo();
+};
+
+fn foo() u8 = {
+	return 8;
+};

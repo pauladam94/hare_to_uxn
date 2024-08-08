@@ -1,0 +1,8 @@
+fn main() void = {
+	let a = test();
+};
+
+fn test() u8 = {
+	main();
+	return 42;
+};

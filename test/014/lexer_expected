@@ -1,0 +1,12 @@
+fn
+main
+(
+)
+void
+=
+{
+return
+42
+;
+}
+;
