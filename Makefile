@@ -8,14 +8,11 @@ CFLAGS = -Wall -Wextra -Wpedantic -fshort-enums -g
 # BUILD EVERYTHING
 build: bin/test_all
 
-rename:
-	for dir in $(wildcard test/*); do mv $$dir/code $$dir/main.ha; done
-
 # TEST
 test: clean_results bin/test_all $(wildcard test/*/*_expected)
 	@start_time=$$(date +%s); \
 	for dir in $(wildcard test/*); do \
-		./bin/test_all $$dir; \
+		./bin/test_all $$dir 2>&1; \
 	done; \
 	end_time=$$(date +%s); \
 	elapsed_time=$$((end_time - start_time)); \

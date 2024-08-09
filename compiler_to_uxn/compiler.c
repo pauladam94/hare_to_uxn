@@ -222,6 +222,16 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		append_instruction(e1, "Deref Assign", true, DEO);
 		return concat_program(e2, e1);
 	}
+	case DEREF_E: { // *e
+		UxnPartialProgram *e =
+		    compile_expr(error, expr->deref.e);
+		if (e == NULL) {
+			break;
+		}
+		append_instruction(e, "deref", true, DEO);
+		// append_intruction();
+		return e;
+	}
 	case VARIABLE_E: {
 		// have to know where variables are located
 		fprintf(error, "variable todo\n");
@@ -250,7 +260,9 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		append_instruction(number, NULL, true, LIT);
 		append_instruction(number, "char literal", false, expr->char_literal.c);
 		return number;
-		fprintf(error, "char_literal call todo\n");
+	}
+	case STRING_LITERAL_E: {
+		fprintf(error, "string literal todo\n");
 		break;
 	}
 	}

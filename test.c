@@ -252,7 +252,7 @@ int main(int argc, char **argv) {
 	/// 2. Executing path_dir/code.rom, put output in path_dir/output_result
 	/// 3. Compare file path_dir/output_expected and path_dir/output_result
 
-	char command[100];
+	char command[200];
 
 	/// 1. Assembling the path_dir/code.uxntal file in path_dir/code.rom
 	sprintf(command, "uxnasm %s/code.uxntal %s/code.rom > %s/uxnasm_result",

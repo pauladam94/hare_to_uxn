@@ -260,6 +260,9 @@ char next_char(Stream *stream) {
 
 Token next_char_literal(Stream *stream, char *c) {
 	*c = next_char(stream);
+	if (*c == '\'') {
+		printf("don't accept empty char_literal");
+	}
 	Token token = token_one_char(stream, CHAR_LITERAL, *c);
 	*c = next_char(stream);
 	if (*c != '\'') {
@@ -270,10 +273,21 @@ Token next_char_literal(Stream *stream, char *c) {
 
 Token next_string_literal(Stream *stream, char *c) {
 	*c = next_char(stream);
+	if (*c == '\"') {
+		printf("don't accept empty string_literal");
+	}
 	Token token = token_one_char(stream, CHAR_LITERAL, *c);
-	*c = next_char(stream);
-	if (*c != '\'') {
-		printf("TODO make this a recoverable error\n");
+	while (true) {
+		*c = next_char(stream);
+		if (*c == '\0') {
+			printf("error missing end of string literal");
+		}
+		if (*c != '\"') {
+			token = token_append_char(token, *c);
+			continue;
+		}
+		*c = next_char(stream);
+		break;
 	}
 	return token;
 }
@@ -424,7 +438,7 @@ Tokens *lexify(FILE *error, FILE *file) {
 	stream.column = 0;
 	stream.pos = 0;
 	stream.file = file;
-	stream.size_buff = 99;
+	stream.size_buff = 100;
 	stream.buff[0] = '\0';
 
 	char c = next_char(&stream);

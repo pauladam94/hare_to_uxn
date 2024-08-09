@@ -8,112 +8,102 @@
 
 /// Deletes completely recursively what expression points to
 /// It does not free the expression it self
-void expression_delete(Expression *expr) {
+void expression_delete(Expression *expr, bool to_delete_itself) {
 	switch (expr->tag) {
-	case LET_E: {
+	case LET_E:
 		free(expr->let.var);
-		expression_delete(expr->let.e);
+		expression_delete(expr->let.e, true);
 		break;
-	}
-	case ADD_E: {
-		expression_delete(expr->add.lhs);
-		expression_delete(expr->add.rhs);
+	case ADD_E:
+		expression_delete(expr->add.lhs, true);
+		expression_delete(expr->add.rhs, true);
 		break;
-	}
-	case SUB_E: {
-		expression_delete(expr->sub.lhs);
-		expression_delete(expr->sub.rhs);
+	case SUB_E:
+		expression_delete(expr->sub.lhs, true);
+		expression_delete(expr->sub.rhs, true);
 		break;
-	}
-	case VARIABLE_E: {
+	case VARIABLE_E:
 		free(expr->variable.name);
 		break;
-	}
-	case NUMBER_E: {
+	case NUMBER_E:
 		break;
-	}
-	case SEQUENCE_E: {
+	case SEQUENCE_E:
 		for (int i = 0; i < expr->sequence.length; i++) {
-			expression_delete(&expr->sequence.list[i]);
+			expression_delete(&expr->sequence.list[i], false);
 		}
 		free(expr->sequence.list);
 		break;
-	}
-	case ASSIGN_E: {
+	case ASSIGN_E:
 		free(expr->assign.var);
-		expression_delete(expr->assign.e);
+		expression_delete(expr->assign.e, true);
 		break;
-	}
-	case DEREF_ASSIGN_E: {
-		expression_delete(expr->deref_assign.e1);
-		expression_delete(expr->deref_assign.e2);
+	case DEREF_ASSIGN_E:
+		expression_delete(expr->deref_assign.e1, true);
+		expression_delete(expr->deref_assign.e2, true);
 		break;
-	}
-	case RETURN_E: {
-		expression_delete(expr->ret.e);
+	case DEREF_E:
+		expression_delete(expr->deref.e, true);
 		break;
-	}
-	case FUNCTION_CALL_E: {
+	case RETURN_E:
+		expression_delete(expr->ret.e, true);
+		break;
+	case FUNCTION_CALL_E:
 		free(expr->function_call.name);
 		break;
-	}
-	case CHAR_LITERAL_E: {
+	case CHAR_LITERAL_E:
+		break;
+	case STRING_LITERAL_E:
 		break;
 	}
+	if (to_delete_itself) {
+		free(expr); // TODO : do that or free in ast_delete
 	}
-	// free(expr); TODO : do that or free in ast_delete
 }
 
 void expression_not_tokens_delete(Expression *expr) {
 	switch (expr->tag) {
-	case LET_E: {
+	case LET_E:
 		// free(expr->let.var);
 		expression_not_tokens_delete(expr->let.e);
 		break;
-	}
-	case ADD_E: {
+	case ADD_E:
 		expression_not_tokens_delete(expr->add.lhs);
 		expression_not_tokens_delete(expr->add.rhs);
 		break;
-	}
-	case SUB_E: {
+	case SUB_E:
 		expression_not_tokens_delete(expr->sub.lhs);
 		expression_not_tokens_delete(expr->sub.rhs);
 		break;
-	}
-	case VARIABLE_E: {
+	case VARIABLE_E:
 		// free(expr->variable.name);
 		break;
-	}
-	case NUMBER_E: {
+	case NUMBER_E:
 		break;
-	}
-	case SEQUENCE_E: {
+	case SEQUENCE_E:
 		for (int i = 0; i < expr->sequence.length; i++) {
 			expression_not_tokens_delete(&expr->sequence.list[i]);
 		}
 		free(expr->sequence.list);
 		break;
-	}
-	case ASSIGN_E: {
+	case ASSIGN_E:
 		expression_not_tokens_delete(expr->assign.e);
 		break;
-	}
-	case DEREF_ASSIGN_E: {
+	case DEREF_ASSIGN_E:
 		expression_not_tokens_delete(expr->deref_assign.e1);
 		expression_not_tokens_delete(expr->deref_assign.e2);
 		break;
-	}
-	case RETURN_E: {
+	case DEREF_E:
+		expression_not_tokens_delete(expr->deref.e);
+		break;
+	case RETURN_E:
 		expression_not_tokens_delete(expr->ret.e);
 		break;
-	}
-	case FUNCTION_CALL_E: {
+	case FUNCTION_CALL_E:
 		break;
-	}
-	case CHAR_LITERAL_E: {
+	case CHAR_LITERAL_E:
 		break;
-	}
+	case STRING_LITERAL_E:
+		break;
 	}
 	free(expr);
 }
@@ -124,8 +114,8 @@ void expression_not_tokens_delete(Expression *expr) {
 void ast_delete(Ast *ast) {
 	for (int i = 0; i < ast->length; i++) {
 		free(ast->functions[i].name);
-		expression_delete(ast->functions[i].expr);
-		free(ast->functions[i].expr);
+		expression_delete(ast->functions[i].expr, true);
+		// free(ast->functions[i].expr);
 	}
 	free(ast->functions);
 	free(ast);
@@ -163,53 +153,45 @@ void ast_append_function(Ast *ast, Function function) {
 
 void fprintf_program_type(FILE *file, ProgramType *program_type) {
 	switch (*program_type) {
-	case U8_T: {
+	case U8_T:
 		fprintf(file, "u8");
 		break;
-	}
-	case U16_T: {
+	case U16_T:
 		fprintf(file, "u16");
 		break;
-	}
-	case VOID_T: {
+	case VOID_T:
 		fprintf(file, "void");
 		break;
-	}
 	}
 }
 
 void fprintf_expression(FILE *file, Expression *expr) {
 	switch (expr->tag) {
-	case LET_E: {
+	case LET_E:
 		fprintf(file, "let %s = ", expr->let.var);
 		fprintf_expression(file, expr->let.e);
 		break;
-	}
-	case ADD_E: {
+	case ADD_E:
 		fprintf_expression(file, expr->add.lhs);
 		fprintf(file, " + ");
 		fprintf_expression(file, expr->add.rhs);
 		break;
-	}
-	case SUB_E: {
+	case SUB_E:
 		fprintf_expression(file, expr->add.lhs);
 		fprintf(file, " - ");
 		fprintf_expression(file, expr->add.rhs);
 		break;
-	}
-	case VARIABLE_E: {
+	case VARIABLE_E:
 		fprintf(file, "%s", expr->variable.name);
 		break;
-	}
-	case NUMBER_E: {
+	case NUMBER_E:
 		if (expr->number.is_written_in_hexa) {
 			fprintf(file, "0%x", expr->number.value);
 		} else {
 			fprintf(file, "%d", expr->number.value);
 		}
 		break;
-	}
-	case SEQUENCE_E: {
+	case SEQUENCE_E:
 		for (int i = 0; i < expr->sequence.length; i++) {
 			fprintf_expression(file, &expr->sequence.list[i]);
 			if (i != expr->sequence.length) {
@@ -217,33 +199,34 @@ void fprintf_expression(FILE *file, Expression *expr) {
 			}
 		}
 		break;
-	}
-	case ASSIGN_E: {
+	case ASSIGN_E:
 		fprintf(file, "%s", expr->assign.var);
 		fprintf(file, " = ");
 		fprintf_expression(file, expr->assign.e);
 		break;
-	}
-	case DEREF_ASSIGN_E: {
+	case DEREF_ASSIGN_E:
 		fprintf(file, "*");
 		fprintf_expression(file, expr->deref_assign.e1);
 		fprintf(file, " = ");
 		fprintf_expression(file, expr->deref_assign.e2);
 		break;
-	}
-	case RETURN_E: {
+	case DEREF_E:
+		fprintf(file, "*");
+		fprintf_expression(file, expr->deref.e);
+		break;
+	case RETURN_E:
 		fprintf(file, "return ");
 		fprintf_expression(file, expr->ret.e);
 		break;
-	}
-	case FUNCTION_CALL_E: {
+	case FUNCTION_CALL_E:
 		fprintf(file, "%s()", expr->function_call.name);
 		break;
-	}
-	case CHAR_LITERAL_E: {
+	case CHAR_LITERAL_E:
 		fprintf(file, "'%c'", expr->char_literal.c);
 		break;
-	}
+	case STRING_LITERAL_E:
+		fprintf(file, "\"%c\"", expr->char_literal.c);
+		break;
 	}
 }
 
@@ -264,38 +247,6 @@ void fprintf_ast(FILE *file, Ast *ast) {
 		fprintf(file, "\n");
 	}
 }
-
-/// PARSE FUNCTIONS API
-///
-/// bool parse_[name] (
-///	FILE* error,
-///	Tokens *tokens,
-///	uint32_t *index,
-///	[Name]* [name],
-///	bool should_work
-/// );
-///
-/// # return true
-/// - we managed to parse [name] element from 'tokens' at the position 'index'.
-/// - 'index' has increase according to the number of tokens read
-/// - 'tokens' has not been mutated
-/// - 'name' contains some sort of result from what has been parsed
-/// - 'err' has not been mutated
-/// - 'should_work' is not taken into account
-///
-/// # return false
-/// - we did not managed to parse [name] element from 'tokens' at 'index'.
-/// - 'index' is the value as before calling the function
-/// - 'tokens' has not been mutated
-/// - 'name' has not been changed from his state before the call
-/// - 'should_work' : true
-///     - 'error' is mutated with an error saying we expected something specific
-/// - 'should_work' : false
-///     - 'error' is not mutated
-///
-/// The should_work boolean means that the fonction should work or it's an
-/// error. Inside a function, if you try to parse 'let', should_work = false
-/// because other possibility can be parsed. 'let' is not the only possibility.
 
 bool parse_token_type(FILE *error, Tokens *tokens, uint32_t *index,
 		      TokenType token_type, bool should_work) {
@@ -334,10 +285,11 @@ bool parse_program_type(FILE *error, Tokens *tokens, uint32_t *index,
 	}
 
 	if (should_work) {
-		fprintf(
-		    error,
-		    "Expected program type at line %d and column %d but got '",
-		    tokens->tokens[*index].line, tokens->tokens[*index].column);
+		fprintf(error,
+			"Expected program type at line %d and column "
+			"%d but got '",
+			tokens->tokens[*index].line,
+			tokens->tokens[*index].column);
 		fprintf_token(error, &tokens->tokens[*index]);
 		fprintf(error, "' a ");
 		fprintf_token_type(error, &tokens->tokens[*index].type);
@@ -390,26 +342,12 @@ bool parse_number(FILE *error, Tokens *tokens, uint32_t *index, Expression *e,
 		e->tag = NUMBER_E;
 		e->number.value = (uint32_t)atoi(tokens->tokens[*index].text);
 		// Here this cannot be free
-		// because it is not necessarely the last time we look at it
+		// because it is not necessarely the last time we look
+		// at it
 		e->number.is_written_in_hexa = false;
 		*index += 1;
 		return true;
 	}
-
-	// TODO que ça marche aussi avec les nombres hexa
-	// if (tokens->tokens[*index].type == NUMBER) {
-	//
-	// }
-
-	// if (should_work) {
-	// 	fprintf(
-	// 	    error, "Expected number at line %d and column %d but got '",
-	// 	    tokens->tokens[*index].line, tokens->tokens[*index].column);
-	// 	fprintf_token(error, &tokens->tokens[*index]);
-	// 	fprintf(error, "' a ");
-	// 	fprintf_token_type(error, &tokens->tokens[*index].type);
-	// 	fprintf(error, "\n");
-	// }
 	return false;
 }
 
@@ -418,6 +356,7 @@ bool parse_char_literal(FILE *error, Tokens *tokens, uint32_t *index,
 	if (tokens->tokens[*index].type == CHAR_LITERAL) {
 		expr->tag = CHAR_LITERAL_E;
 		expr->char_literal.c = tokens->tokens[*index].text[0];
+		free(tokens->tokens[*index].text);
 		*index += 1;
 		return true;
 	}
@@ -459,13 +398,12 @@ bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 		expr->tag = LET_E;
 		expr->let.e = e;
 		return true;
-	} else {
-		free(e);
-		e = NULL;
 	}
+	free(e);
+	e = NULL;
 	*i = prev_index;
 
-	// Trying to parse : * e1 = e2
+	// Trying to parse : *e1 = e2
 	prev_index = *i;
 	e1 = malloc(sizeof(*e1));
 	e2 = malloc(sizeof(*e2));
@@ -477,26 +415,37 @@ bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 		expr->deref_assign.e1 = e1;
 		expr->deref_assign.e2 = e2;
 		return true;
-	} else {
-		free(e1);
-		free(e2);
-		e1 = NULL;
-		e2 = NULL;
 	}
+	free(e1);
+	free(e2);
+	e1 = NULL;
+	e2 = NULL;
+	*i = prev_index;
+
+	// Trying to parse : *e
+	prev_index = *i;
+	e = malloc(sizeof(*e));
+	if (parse_token_type(error, tokens, i, MULT, false) &&
+	    parse_expr_1(error, tokens, i, e, true && should_work)) {
+		expr->tag = DEREF_E;
+		expr->deref.e = e;
+		return true;
+	}
+	free(e);
+	e = NULL;
 	*i = prev_index;
 
 	// Try to parse : return e
 	prev_index = *i;
 	e = malloc(sizeof(*e));
 	if (parse_token_type(error, tokens, i, RETURN, false) &&
-	    parse_expr_2(error, tokens, i, e, true && should_work)) {
+	    parse_expr_1(error, tokens, i, e, true && should_work)) {
 		expr->tag = RETURN_E;
 		expr->ret.e = e;
 		return true;
-	} else {
-		free(e);
-		e = NULL;
 	}
+	free(e);
+	e = NULL;
 	*i = prev_index;
 
 	// Try to parse : var = e
@@ -508,9 +457,8 @@ bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 		expr->tag = ASSIGN_E;
 		expr->assign.e = e;
 		return true;
-	} else {
-		free(e);
 	}
+	free(e);
 	*i = prev_index;
 
 	// Try to parse : function_name ( ) TODO args
@@ -551,7 +499,8 @@ bool parse_expr_1(FILE *error, Tokens *tokens, uint32_t *index,
 	if (!parse_expr_2(error, tokens, index, lhs, false)) {
 		if (should_work) {
 			fprintf(error,
-				"Expected an Expression1 at line %d and column "
+				"Expected an Expression1 at line %d "
+				"and column "
 				"%d\n",
 				tokens->tokens[*index].line,
 				tokens->tokens[*index].column);
@@ -673,11 +622,10 @@ Ast *parse(FILE *error, Tokens *tokens) {
 		if (parse_function(error, tokens, &index, &function)) {
 			if (parse_token_type(error, tokens, &index, SEMICOLON,
 					     true)) {
-				// function is stack allocated and copied here
 				ast_append_function(ast, function);
 			} else {
-				fprintf(error,
-					"Function should be separated by ';'");
+				fprintf(error, "Function should be "
+					       "separated by ';'");
 				// expression_free(function.expr);
 				return false;
 			}

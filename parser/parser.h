@@ -33,6 +33,9 @@ typedef struct Expression {
 			struct Expression *e1;
 			struct Expression *e2;
 		} deref_assign;
+		struct { // *e
+			struct Expression *e;
+		} deref;
 		struct { // name
 			char *name;
 		} variable;
@@ -64,11 +67,13 @@ typedef struct Expression {
 		SEQUENCE_E,
 		ASSIGN_E,
 		DEREF_ASSIGN_E,
+		DEREF_E,
 		VARIABLE_E,
 		NUMBER_E,
 		RETURN_E,
 		FUNCTION_CALL_E,
 		CHAR_LITERAL_E,
+		STRING_LITERAL_E,
 	} tag;
 } Expression;
 
