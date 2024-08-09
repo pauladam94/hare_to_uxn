@@ -86,7 +86,7 @@ typedef struct {
 
 // Input : list of tokens
 // Ouput : Ast constructed from those tokens or NULL if there is a parsing error
-Ast *parse(Tokens *tokens, FILE *error);
+Ast *parse(FILE* error, Tokens *tokens);
 
 void ast_delete(Ast *ast);
 

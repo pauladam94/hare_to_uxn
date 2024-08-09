@@ -267,8 +267,13 @@ void fprintf_ast(FILE *file, Ast *ast) {
 
 /// PARSE FUNCTIONS API
 ///
-/// bool parse_[name] (Tokens *tokens, uint32_t *index, [Name]* [name],
-///                        FILE* error, bool should_work);
+/// bool parse_[name] (
+///	FILE* error,
+///	Tokens *tokens,
+///	uint32_t *index,
+///	[Name]* [name],
+///	bool should_work
+/// );
 ///
 /// # return true
 /// - we managed to parse [name] element from 'tokens' at the position 'index'.
@@ -292,8 +297,8 @@ void fprintf_ast(FILE *file, Ast *ast) {
 /// error. Inside a function, if you try to parse 'let', should_work = false
 /// because other possibility can be parsed. 'let' is not the only possibility.
 
-bool parse_token_type(Tokens *tokens, uint32_t *index, TokenType token_type,
-		      FILE *error, bool should_work) {
+bool parse_token_type(FILE *error, Tokens *tokens, uint32_t *index,
+		      TokenType token_type, bool should_work) {
 	if (tokens->tokens[*index].type == token_type) {
 		*index += 1;
 		return true;
@@ -312,9 +317,8 @@ bool parse_token_type(Tokens *tokens, uint32_t *index, TokenType token_type,
 	return false;
 }
 
-bool parse_program_type(Tokens *tokens, uint32_t *index,
-			ProgramType *program_type, FILE *error,
-			bool should_work) {
+bool parse_program_type(FILE *error, Tokens *tokens, uint32_t *index,
+			ProgramType *program_type, bool should_work) {
 	if (tokens->tokens[*index].type == VOID) {
 		*program_type = VOID_T;
 		*index += 1;
@@ -342,7 +346,7 @@ bool parse_program_type(Tokens *tokens, uint32_t *index,
 	return false;
 }
 
-bool parse_identifier(Tokens *tokens, uint32_t *index, char **s, FILE *error,
+bool parse_identifier(FILE *error, Tokens *tokens, uint32_t *index, char **s,
 		      bool should_work) {
 	if (tokens->tokens[*index].type == IDENTIFIER) {
 		*s = tokens->tokens[*index].text;
@@ -361,7 +365,7 @@ bool parse_identifier(Tokens *tokens, uint32_t *index, char **s, FILE *error,
 	return false;
 }
 
-bool parse_number(Tokens *tokens, uint32_t *index, Expression *e, FILE *error,
+bool parse_number(FILE *error, Tokens *tokens, uint32_t *index, Expression *e,
 		  bool should_work) {
 
 	// Number in hexadecimal form "0x123" (lex as '0' 'x123')
@@ -409,8 +413,8 @@ bool parse_number(Tokens *tokens, uint32_t *index, Expression *e, FILE *error,
 	return false;
 }
 
-bool parse_char_literal(Tokens *tokens, uint32_t *index, Expression *expr,
-			FILE *error, bool should_work) {
+bool parse_char_literal(FILE *error, Tokens *tokens, uint32_t *index,
+			Expression *expr, bool should_work) {
 	if (tokens->tokens[*index].type == CHAR_LITERAL) {
 		expr->tag = CHAR_LITERAL_E;
 		expr->char_literal.c = tokens->tokens[*index].text[0];
@@ -425,15 +429,15 @@ bool parse_args_call(FILE *error);
 // TODO
 bool parse_args_def(FILE *error);
 
-bool parse_let(Tokens *tokens, uint32_t *index, Expression *expr, FILE *error,
+bool parse_let(FILE *error, Tokens *tokens, uint32_t *index, Expression *expr,
 	       bool should_work) {
 	return false;
 }
 
-bool parse_expr_1(Tokens *tokens, uint32_t *index, Expression *expr,
-		  FILE *error, bool should_work);
+bool parse_expr_1(FILE *error, Tokens *tokens, uint32_t *index,
+		  Expression *expr, bool should_work);
 
-bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
+bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 		  bool should_work) {
 	uint32_t prev_index;
 	Expression *e;
@@ -441,17 +445,17 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	Expression *e2;
 
 	// Trying to parse : 'char'
-	if (parse_char_literal(tokens, i, expr, error, true && should_work)) {
+	if (parse_char_literal(error, tokens, i, expr, true && should_work)) {
 		return true;
 	}
 	// Trying to parse :let var = e
 	prev_index = *i;
 	e = malloc(sizeof(*e));
-	if (parse_token_type(tokens, i, LET, error, false) &&
-	    parse_identifier(tokens, i, &expr->let.var, error,
+	if (parse_token_type(error, tokens, i, LET, false) &&
+	    parse_identifier(error, tokens, i, &expr->let.var,
 			     true && should_work) &&
-	    parse_token_type(tokens, i, EQUAL, error, true && should_work) &&
-	    parse_expr_1(tokens, i, e, error, true && should_work)) {
+	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
+	    parse_expr_1(error, tokens, i, e, true && should_work)) {
 		expr->tag = LET_E;
 		expr->let.e = e;
 		return true;
@@ -465,10 +469,10 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	prev_index = *i;
 	e1 = malloc(sizeof(*e1));
 	e2 = malloc(sizeof(*e2));
-	if (parse_token_type(tokens, i, MULT, error, false) &&
-	    parse_expr_1(tokens, i, e1, error, true && should_work) &&
-	    parse_token_type(tokens, i, EQUAL, error, true && should_work) &&
-	    parse_expr_1(tokens, i, e2, error, true && should_work)) {
+	if (parse_token_type(error, tokens, i, MULT, false) &&
+	    parse_expr_1(error, tokens, i, e1, true && should_work) &&
+	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
+	    parse_expr_1(error, tokens, i, e2, true && should_work)) {
 		expr->tag = DEREF_ASSIGN_E;
 		expr->deref_assign.e1 = e1;
 		expr->deref_assign.e2 = e2;
@@ -484,8 +488,8 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	// Try to parse : return e
 	prev_index = *i;
 	e = malloc(sizeof(*e));
-	if (parse_token_type(tokens, i, RETURN, error, false) &&
-	    parse_expr_2(tokens, i, e, error, true && should_work)) {
+	if (parse_token_type(error, tokens, i, RETURN, false) &&
+	    parse_expr_2(error, tokens, i, e, true && should_work)) {
 		expr->tag = RETURN_E;
 		expr->ret.e = e;
 		return true;
@@ -498,9 +502,9 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	// Try to parse : var = e
 	prev_index = *i;
 	e = malloc(sizeof(*e));
-	if (parse_identifier(tokens, i, &expr->assign.var, error, false) &&
-	    parse_token_type(tokens, i, EQUAL, error, false) &&
-	    parse_expr_1(tokens, i, e, error, true && should_work)) {
+	if (parse_identifier(error, tokens, i, &expr->assign.var, false) &&
+	    parse_token_type(error, tokens, i, EQUAL, false) &&
+	    parse_expr_1(error, tokens, i, e, true && should_work)) {
 		expr->tag = ASSIGN_E;
 		expr->assign.e = e;
 		return true;
@@ -511,21 +515,21 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 
 	// Try to parse : function_name ( ) TODO args
 	prev_index = *i;
-	if (parse_identifier(tokens, i, &expr->function_call.name, error,
+	if (parse_identifier(error, tokens, i, &expr->function_call.name,
 			     false) &&
-	    parse_token_type(tokens, i, LPAREN, error, false) &&
-	    parse_token_type(tokens, i, RPAREN, error, true && should_work)) {
+	    parse_token_type(error, tokens, i, LPAREN, false) &&
+	    parse_token_type(error, tokens, i, RPAREN, true && should_work)) {
 		expr->tag = FUNCTION_CALL_E;
 		return true;
 	}
 	*i = prev_index;
 
-	if (parse_identifier(tokens, i, &expr->variable.name, error, false)) {
+	if (parse_identifier(error, tokens, i, &expr->variable.name, false)) {
 		expr->tag = VARIABLE_E;
 		return true;
 	}
 
-	if (parse_number(tokens, i, expr, error, false)) {
+	if (parse_number(error, tokens, i, expr, false)) {
 		return true;
 	}
 
@@ -538,13 +542,13 @@ bool parse_expr_2(Tokens *tokens, uint32_t *i, Expression *expr, FILE *error,
 	return false;
 }
 
-bool parse_expr_1(Tokens *tokens, uint32_t *index, Expression *expr,
-		  FILE *error, bool should_work) {
+bool parse_expr_1(FILE *error, Tokens *tokens, uint32_t *index,
+		  Expression *expr, bool should_work) {
 	uint32_t prev_index;
 
 	Expression *lhs = malloc(sizeof(*lhs));
 
-	if (!parse_expr_2(tokens, index, lhs, error, false)) {
+	if (!parse_expr_2(error, tokens, index, lhs, false)) {
 		if (should_work) {
 			fprintf(error,
 				"Expected an Expression1 at line %d and column "
@@ -556,9 +560,9 @@ bool parse_expr_1(Tokens *tokens, uint32_t *index, Expression *expr,
 		return false;
 	}
 
-	if (parse_token_type(tokens, index, PLUS, error, false)) {
+	if (parse_token_type(error, tokens, index, PLUS, false)) {
 		Expression *rhs = malloc(sizeof(*rhs));
-		if (parse_expr_1(tokens, index, rhs, error,
+		if (parse_expr_1(error, tokens, index, rhs,
 				 true && should_work)) {
 			expr->tag = ADD_E;
 			expr->add.lhs = lhs;
@@ -568,9 +572,9 @@ bool parse_expr_1(Tokens *tokens, uint32_t *index, Expression *expr,
 		free(rhs);
 	}
 
-	if (parse_token_type(tokens, index, MINUS, error, false)) {
+	if (parse_token_type(error, tokens, index, MINUS, false)) {
 		Expression *rhs = malloc(sizeof(*rhs));
-		if (parse_expr_1(tokens, index, rhs, error, should_work)) {
+		if (parse_expr_1(error, tokens, index, rhs, should_work)) {
 			expr->tag = SUB_E;
 			expr->add.lhs = lhs;
 			expr->add.rhs = rhs;
@@ -584,19 +588,19 @@ bool parse_expr_1(Tokens *tokens, uint32_t *index, Expression *expr,
 	return true;
 }
 
-bool parse_expr(Tokens *tokens, uint32_t *index, Expression *expr, FILE *error,
+bool parse_expr(FILE *error, Tokens *tokens, uint32_t *index, Expression *expr,
 		bool should_work) {
 	bool expression_is_empty = true;
 
-	if (!parse_token_type(tokens, index, LBRACE, error, true)) {
+	if (!parse_token_type(error, tokens, index, LBRACE, true)) {
 		return false;
 	}
 
 	// trying parsing : (expression ;)*
 	uint32_t prev_index = *index;
 	Expression expr_next;
-	while (parse_expr_1(tokens, index, &expr_next, error, false) &&
-	       parse_token_type(tokens, index, SEMICOLON, error,
+	while (parse_expr_1(error, tokens, index, &expr_next, false) &&
+	       parse_token_type(error, tokens, index, SEMICOLON,
 				true && should_work)) {
 		prev_index = *index;
 		if (expression_is_empty) {
@@ -625,7 +629,7 @@ bool parse_expr(Tokens *tokens, uint32_t *index, Expression *expr, FILE *error,
 		return false;
 	}
 
-	if (!parse_token_type(tokens, index, RBRACE, error, true)) {
+	if (!parse_token_type(error, tokens, index, RBRACE, true)) {
 		return false;
 	}
 
@@ -633,20 +637,20 @@ bool parse_expr(Tokens *tokens, uint32_t *index, Expression *expr, FILE *error,
 }
 
 // fn indentifier () type = expression
-bool parse_function(Tokens *tokens, uint32_t *index, Function *function,
-		    FILE *error) {
+bool parse_function(FILE *error, Tokens *tokens, uint32_t *index,
+		    Function *function) {
 	char *function_name;
 	uint32_t prev_index;
 
 	Expression *expression = malloc(sizeof(*expression));
 	prev_index = *index;
-	if (parse_token_type(tokens, index, FN, error, true) &&
-	    parse_identifier(tokens, index, &function_name, error, true) &&
-	    parse_token_type(tokens, index, LPAREN, error, true) &&
-	    parse_token_type(tokens, index, RPAREN, error, true) &&
-	    parse_program_type(tokens, index, &function->type, error, true) &&
-	    parse_token_type(tokens, index, EQUAL, error, true) &&
-	    parse_expr(tokens, index, expression, error, true)) {
+	if (parse_token_type(error, tokens, index, FN, true) &&
+	    parse_identifier(error, tokens, index, &function_name, true) &&
+	    parse_token_type(error, tokens, index, LPAREN, true) &&
+	    parse_token_type(error, tokens, index, RPAREN, true) &&
+	    parse_program_type(error, tokens, index, &function->type, true) &&
+	    parse_token_type(error, tokens, index, EQUAL, true) &&
+	    parse_expr(error, tokens, index, expression, true)) {
 		function->name = function_name;
 		function->expr = expression;
 		return true;
@@ -660,14 +664,14 @@ bool parse_function(Tokens *tokens, uint32_t *index, Function *function,
 
 // Input : list of tokens
 // Ouput : result of an Ast constructed from those tokens
-Ast *parse(Tokens *tokens, FILE *error) {
+Ast *parse(FILE *error, Tokens *tokens) {
 	uint32_t index = 0;
 	Ast *ast = ast_new();
 
 	while (index < tokens->length) {
 		Function function;
-		if (parse_function(tokens, &index, &function, error)) {
-			if (parse_token_type(tokens, &index, SEMICOLON, error,
+		if (parse_function(error, tokens, &index, &function)) {
+			if (parse_token_type(error, tokens, &index, SEMICOLON,
 					     true)) {
 				// function is stack allocated and copied here
 				ast_append_function(ast, function);

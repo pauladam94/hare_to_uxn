@@ -1,5 +1,5 @@
 fn main() void = {
-	let output = 0x18;
+	let output : i8 = 0x18;
 	*output = fibo(6);
 	*output = 10; // end of line
 };

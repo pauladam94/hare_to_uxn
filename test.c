@@ -57,8 +57,16 @@ int main(int argc, char **argv) {
 	};
 
 	/// 1. Try to lex path_dir/code, and write it to path_dir/lexer_result
-	Tokens *tokens = lexify(file_code);
+	error = fopen(path_error, "w");
+	Tokens *tokens = lexify(error, file_code);
+	if (tokens == NULL) {
+		red();
+		printf("[Error lexing %s]\n", path_code);
+		reset();
+		return 0;
+	}
 	fclose(file_code);
+	fclose(error);
 
 	file_result = fopen(path_result, "w");
 	if (file_result == NULL) {
@@ -113,7 +121,7 @@ int main(int argc, char **argv) {
 
 	/// 1. Try to parse the list of tokens (in path_dir/lexer_result)
 	error = fopen(path_error, "w");
-	Ast *ast = parse(tokens, error);
+	Ast *ast = parse(error, tokens);
 	fclose(error);
 
 	if (ast == NULL) {
@@ -129,18 +137,26 @@ int main(int argc, char **argv) {
 	fclose(file_result);
 
 	/// 3. Parse and lex the file path_dir/parser_result
+	error = fopen(path_error, "w");
 	file_code = fopen(path_result, "r");
-	Tokens *tokens_2 = lexify(file_code);
+	Tokens *tokens_2 = lexify(error, file_code);
+	if (tokens_2 == NULL) {
+		red();
+		printf("[Error lexing %s]\n", path_result);
+		reset();
+		return 0;
+	}
 	fclose(file_code);
+	fclose(error);
 
 	error = fopen(path_error, "w");
-	Ast *ast_2 = parse(tokens_2, error);
+	Ast *ast_2 = parse(error, tokens_2);
 	fclose(error);
 
 	if (ast_2 == NULL) {
 		red();
 		printf(
-		    "[Error during parsing again output of first parsing]\n");
+		    "[Error parsing %s]\n", path_result);
 		reset();
 		return 0;
 	}
@@ -170,7 +186,17 @@ int main(int argc, char **argv) {
 
 	file_result = fopen(path_result, "w");
 	file_2_result = fopen(path_2_result, "r");
-	tokens = lexify(file_2_result);
+
+	error = fopen(path_error, "w");
+	tokens = lexify(error, file_2_result);
+	if (tokens == NULL) {
+		red();
+		printf("[Error lexing the second parser output]\n");
+		reset();
+		return 0;
+	}
+	fclose(error);
+
 	fprintf_tokens(file_result, tokens);
 	tokens_delete(tokens);
 	fclose(file_result);

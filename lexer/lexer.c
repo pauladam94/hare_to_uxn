@@ -7,13 +7,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+	FILE *file;
+	int size_buff;
+	int pos;
+	char buff[100];
+	uint16_t line;
+	uint16_t column;
+} Stream;
+
 ///// ----- TOKEN ----- /////
 
-Token token_one_char(TokenType token_type, char c, uint16_t line,
-		     uint16_t column) {
+Token token_one_char(Stream *stream, TokenType token_type, char c) {
 	Token token;
-	token.line = line;
-	token.column = column;
+	token.line = stream->line;
+	token.column = stream->column;
 	token.type = token_type;
 	token.text = (char *)malloc(2 * sizeof(char));
 	token.text[0] = c;
@@ -21,10 +29,10 @@ Token token_one_char(TokenType token_type, char c, uint16_t line,
 	return token;
 }
 
-Token token_only_type(TokenType token_type, uint16_t line, uint16_t column) {
+Token token_only_type(Stream *stream, TokenType token_type) {
 	Token token;
-	token.line = line;
-	token.column = column;
+	token.line = stream->line;
+	token.column = stream->column;
 	token.type = token_type;
 	token.text = NULL;
 	return token;
@@ -59,10 +67,10 @@ void fprintf_token_type(FILE *file, TokenType *token_type) {
 	case NUMBER:
 		fprintf(file, "Number");
 		break;
-	case SYMBOL:
-		fprintf(file, "Symbol");
-		break;
 	case CHAR_LITERAL:
+		fprintf(file, "Character Literal");
+		break;
+	case STRING_LITERAL:
 		fprintf(file, "String Literal");
 		break;
 	case COLON:
@@ -139,11 +147,11 @@ void fprintf_token(FILE *file, Token *token) {
 	case NUMBER:
 		fprintf(file, "%s", token->text);
 		break;
-	case SYMBOL:
-		fprintf(file, "%s", token->text);
-		break;
 	case CHAR_LITERAL:
 		fprintf(file, "'%s'", token->text);
+		break;
+	case STRING_LITERAL:
+		fprintf(file, "\"%s\"", token->text);
 		break;
 	default:
 		fprintf_token_type(file, &token->type);
@@ -187,7 +195,6 @@ void tokens_adapt_array(Tokens *tokens) {
 void tokens_append_token(Tokens *tokens, Token token) {
 	tokens->length++;
 	tokens_adapt_array(tokens);
-
 	tokens->tokens[tokens->length - 1] = token;
 }
 
@@ -229,33 +236,42 @@ void fprintf_tokens(FILE *file, Tokens *tokens) {
 
 // return the next character of the stream file
 // return '\0' if it is the end of the file
-char next_char(FILE *file, char *buff, int size_buff, int *pos, uint16_t *line,
-	       uint16_t *column) {
+char next_char(Stream *stream) {
 	char c;
-	if (buff[*pos] == '\0') {
-		if (fgets(buff, size_buff, file) == NULL) {
+	if (stream->buff[stream->pos] == '\0') {
+		if (fgets(stream->buff, stream->size_buff, stream->file) ==
+		    NULL) {
 			return '\0';
 		} else {
-			*pos = 1;
+			stream->pos = 1;
 		}
 	} else {
-		*pos += 1;
+		stream->pos += 1;
 	}
-	c = buff[*pos - 1];
+	c = stream->buff[stream->pos - 1];
 	if (c == '\n') {
-		*line += 1;
-		*column = 0;
+		stream->line += 1;
+		stream->column = 0;
 	} else {
-		*column += 1;
+		stream->column += 1;
 	}
 	return c;
 }
 
-Token next_char_literal(FILE *file, char *buff, int size_buff, int *pos,
-			uint16_t *line, uint16_t *column, char *c) {
-	*c = next_char(file, buff, size_buff, pos, line, column);
-	Token token = token_one_char(CHAR_LITERAL, *c, *line, *column);
-	*c = next_char(file, buff, size_buff, pos, line, column);
+Token next_char_literal(Stream *stream, char *c) {
+	*c = next_char(stream);
+	Token token = token_one_char(stream, CHAR_LITERAL, *c);
+	*c = next_char(stream);
+	if (*c != '\'') {
+		printf("TODO make this a recoverable error\n");
+	}
+	return token;
+}
+
+Token next_string_literal(Stream *stream, char *c) {
+	*c = next_char(stream);
+	Token token = token_one_char(stream, CHAR_LITERAL, *c);
+	*c = next_char(stream);
 	if (*c != '\'') {
 		printf("TODO make this a recoverable error\n");
 	}
@@ -263,13 +279,12 @@ Token next_char_literal(FILE *file, char *buff, int size_buff, int *pos,
 }
 
 // Apply next_char until arriving on the end of the line
-void next_comment(FILE *file, char *buff, int size_buff, int *pos,
-		  uint16_t *line, uint16_t *column, char *c) {
+void next_comment(Stream *stream, char *c) {
 	if (*c == '\n') {
 		return;
 	}
 	while (true) {
-		*c = next_char(file, buff, size_buff, pos, line, column);
+		*c = next_char(stream);
 		if (*c != '\n') {
 			continue;
 		}
@@ -277,11 +292,10 @@ void next_comment(FILE *file, char *buff, int size_buff, int *pos,
 	}
 }
 
-Token next_number(FILE *file, char *buff, int size_buff, int *pos,
-		  uint16_t *line, uint16_t *column, char *c) {
-	Token token = token_one_char(NUMBER, *c, *line, *column);
+Token next_number(Stream *stream, char *c) {
+	Token token = token_one_char(stream, NUMBER, *c);
 	while (true) {
-		*c = next_char(file, buff, size_buff, pos, line, column);
+		*c = next_char(stream);
 		if (isdigit(*c)) {
 			token = token_append_char(token, *c);
 			continue;
@@ -291,143 +305,139 @@ Token next_number(FILE *file, char *buff, int size_buff, int *pos,
 	return token;
 }
 
-Token next_ident(FILE *file, char *buff, int size_buff, int *pos,
-		 uint16_t *line, uint16_t *column, char *c) {
-	Token token = token_one_char(IDENTIFIER, *c, *line, *column);
+Token next_ident(Stream *stream, char *c) {
+	Token token = token_one_char(stream, IDENTIFIER, *c);
 	while (true) {
-		*c = next_char(file, buff, size_buff, pos, line, column);
+		*c = next_char(stream);
 		if (isalpha(*c) || isdigit(*c) || *c == '_') {
 			token = token_append_char(token, *c);
 			continue;
 		}
 		if (strcmp("fn", token.text) == 0) {
 			free(token.text);
-			return token_only_type(FN, *line, *column);
+			return token_only_type(stream, FN);
 		} else if (strcmp("let", token.text) == 0) {
 			free(token.text);
-			return token_only_type(LET, *line, *column);
+			return token_only_type(stream, LET);
 		} else if (strcmp("return", token.text) == 0) {
 			free(token.text);
-			return token_only_type(RETURN, *line, *column);
+			return token_only_type(stream, RETURN);
 		} else if (strcmp("void", token.text) == 0) {
 			free(token.text);
-			return token_only_type(VOID, *line, *column);
+			return token_only_type(stream, VOID);
 		} else if (strcmp("u8", token.text) == 0) {
 			free(token.text);
-			return token_only_type(U8, *line, *column);
+			return token_only_type(stream, U8);
 		} else if (strcmp("u16", token.text) == 0) {
 			free(token.text);
-			return token_only_type(U16, *line, *column);
+			return token_only_type(stream, U16);
 		}
 		return token;
 	}
 }
 
 // This function returns the next token of the stream and advance in the stream
-Token next_token(FILE *file, char *buff, int size_buff, int *pos,
-		 uint16_t *line, uint16_t *column, char *c, bool *empty_token) {
+Token next_token(Stream *stream, char *c, bool *empty_token) {
 	Token token;
 	if (isspace(*c)) {
-		*c = next_char(file, buff, size_buff, pos, line, column);
+		*c = next_char(stream);
 		*empty_token = true;
 		return token;
 	}
 	if (isdigit(*c)) {
-		return next_number(file, buff, size_buff, pos, line, column, c);
+		return next_number(stream, c);
 	} else if (isalpha(*c) || *c == '_') {
-		return next_ident(file, buff, size_buff, pos, line, column, c);
+		return next_ident(stream, c);
 	}
 	switch (*c) {
 	case '/': {
-		*c = next_char(file, buff, size_buff, pos, line, column);
+		*c = next_char(stream);
 		if (*c == '/') {
-			next_comment(file, buff, size_buff, pos, line, column,
-				     c);
+			next_comment(stream, c);
 			*empty_token = true;
 			return token;
 		}
-		return token_only_type(DIVIDE, *line, *column);
+		return token_only_type(stream, DIVIDE);
 	}
 	case ':':
-		token = token_only_type(COLON, *line, *column);
+		token = token_only_type(stream, COLON);
 		break;
 	case ',':
-		token = token_only_type(COMMA, *line, *column);
+		token = token_only_type(stream, COMMA);
 		break;
 	case ';':
-		token = token_only_type(SEMICOLON, *line, *column);
+		token = token_only_type(stream, SEMICOLON);
 		break;
 	case '{':
-		token = token_only_type(LBRACE, *line, *column);
+		token = token_only_type(stream, LBRACE);
 		break;
 	case '}':
-		token = token_only_type(RBRACE, *line, *column);
+		token = token_only_type(stream, RBRACE);
 		break;
 	case '[':
-		token = token_only_type(LBRACKET, *line, *column);
+		token = token_only_type(stream, LBRACKET);
 		break;
 	case ']':
-		token = token_only_type(RBRACKET, *line, *column);
+		token = token_only_type(stream, RBRACKET);
 		break;
 	case '(':
-		token = token_only_type(LPAREN, *line, *column);
+		token = token_only_type(stream, LPAREN);
 		break;
 	case ')':
-		token = token_only_type(RPAREN, *line, *column);
+		token = token_only_type(stream, RPAREN);
 		break;
 	case '=':
-		token = token_only_type(EQUAL, *line, *column);
+		token = token_only_type(stream, EQUAL);
 		break;
 	case '+':
-		token = token_only_type(PLUS, *line, *column);
+		token = token_only_type(stream, PLUS);
 		break;
 	case '-':
-		token = token_only_type(MINUS, *line, *column);
+		token = token_only_type(stream, MINUS);
 		break;
 	case '*':
-		token = token_only_type(MULT, *line, *column);
+		token = token_only_type(stream, MULT);
 		break;
 	case '\'':
-		token = next_char_literal(file, buff, size_buff, pos, line,
-					  column, c);
+		token = next_char_literal(stream, c);
+		break;
+	case '\"':
+		token = next_string_literal(stream, c);
 		break;
 	default:
 		break;
 	}
 
-	*c = next_char(file, buff, size_buff, pos, line, column);
+	*c = next_char(stream);
 	return token;
 }
 
 // Input : file name to lexify
 // Ouput : Result (list tokens) : this can be an error
-Tokens *lexify(FILE *file) {
+Tokens *lexify(FILE *error, FILE *file) {
 	Tokens *tokens = tokens_empty();
 
 	bool empty_token = false;
 
-	uint16_t line = 1;
-	uint16_t column = 0;
+	Stream stream;
+	stream.line = 1;
+	stream.column = 0;
+	stream.pos = 0;
+	stream.file = file;
+	stream.size_buff = 99;
+	stream.buff[0] = '\0';
 
-	int size_buff = 100;
-	char buff[size_buff];
-	buff[0] = '\0';
-	int pos = 0;
-
-	char *c = malloc(sizeof(char));
-	*c = next_char(file, buff, size_buff, &pos, &line, &column);
+	char c = next_char(&stream);
 	while (true) {
-		if (*c == '\0') {
+		if (c == '\0') {
 			break;
 		}
-		Token token = next_token(file, buff, size_buff, &pos, &line,
-					 &column, c, &empty_token);
+		Token token = next_token(&stream, &c, &empty_token);
 		if (empty_token) {
 			empty_token = false;
 			continue;
 		}
 		tokens_append_token(tokens, token);
 	}
-	free(c);
 	return tokens;
 }

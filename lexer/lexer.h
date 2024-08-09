@@ -5,8 +5,8 @@
 typedef enum {
 	IDENTIFIER, // a2 - ab_cd - x - ...
 	NUMBER,	    // 234 - 1 - 0172 - ...
-	SYMBOL,	    // == - ; - { - ...
 	CHAR_LITERAL,
+	STRING_LITERAL,
 
 	// SYMBOLS
 	COLON,	   // :
@@ -52,7 +52,7 @@ typedef struct {
 // Input : file name
 // Ouput : list of tokens of the file name
 // Note : This functions deletes all the comments
-Tokens *lexify(FILE *file);
+Tokens *lexify(FILE* error, FILE *file);
 
 // Free the struct tokens but not any string allocated on the heap
 // void tokens_free(Tokens *tokens);

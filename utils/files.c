@@ -2,11 +2,12 @@
 #include <stdio.h>
 
 bool files_equal(FILE *file1, FILE *file2) {
-	char buff1[100];
-	char buff2[100];
+	int buff_size = 100;
+	char buff1[buff_size];
+	char buff2[buff_size];
 	while (true) {
-		char *finish1 = fgets(buff1, 100, file1);
-		char *finish2 = fgets(buff2, 100, file2);
+		char *finish1 = fgets(buff1, buff_size, file1);
+		char *finish2 = fgets(buff2, buff_size, file2);
 		if (finish1 == NULL && finish2 == NULL) {
 			return true;
 		}
@@ -14,7 +15,7 @@ bool files_equal(FILE *file1, FILE *file2) {
 		    (finish1 != NULL && finish2 == NULL)) {
 			return false;
 		}
-		for (int i = 0; i < 100; i++) {
+		for (int i = 0; i < buff_size; i++) {
 			if (buff1[i] == 0 && buff2[i] == 0) {
 				break;
 			}
