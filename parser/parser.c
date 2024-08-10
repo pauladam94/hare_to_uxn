@@ -8,7 +8,7 @@
 
 /// Deletes completely recursively what expression points to
 /// It does not free the expression it self
-void expression_delete(Expression *expr, bool to_delete_itself) {
+void expression_delete(Expression *expr, bool delete_itself) {
 	switch (expr->tag) {
 	case LET_E:
 		free(expr->let.var);
@@ -55,57 +55,9 @@ void expression_delete(Expression *expr, bool to_delete_itself) {
 	case STRING_LITERAL_E:
 		break;
 	}
-	if (to_delete_itself) {
-		free(expr); // TODO : do that or free in ast_delete
+	if (delete_itself) {
+		free(expr);
 	}
-}
-
-void expression_not_tokens_delete(Expression *expr) {
-	switch (expr->tag) {
-	case LET_E:
-		// free(expr->let.var);
-		expression_not_tokens_delete(expr->let.e);
-		break;
-	case ADD_E:
-		expression_not_tokens_delete(expr->add.lhs);
-		expression_not_tokens_delete(expr->add.rhs);
-		break;
-	case SUB_E:
-		expression_not_tokens_delete(expr->sub.lhs);
-		expression_not_tokens_delete(expr->sub.rhs);
-		break;
-	case VARIABLE_E:
-		// free(expr->variable.name);
-		break;
-	case NUMBER_E:
-		break;
-	case SEQUENCE_E:
-		for (int i = 0; i < expr->sequence.length; i++) {
-			expression_not_tokens_delete(&expr->sequence.list[i]);
-		}
-		free(expr->sequence.list);
-		break;
-	case ASSIGN_E:
-		expression_not_tokens_delete(expr->assign.e);
-		break;
-	case DEREF_ASSIGN_E:
-		expression_not_tokens_delete(expr->deref_assign.e1);
-		expression_not_tokens_delete(expr->deref_assign.e2);
-		break;
-	case DEREF_E:
-		expression_not_tokens_delete(expr->deref.e);
-		break;
-	case RETURN_E:
-		expression_not_tokens_delete(expr->ret.e);
-		break;
-	case FUNCTION_CALL_E:
-		break;
-	case CHAR_LITERAL_E:
-		break;
-	case STRING_LITERAL_E:
-		break;
-	}
-	free(expr);
 }
 
 ///// ----- AST FUNCTIONS ----- /////
@@ -153,6 +105,9 @@ void ast_append_function(Ast *ast, Function function) {
 
 void fprintf_program_type(FILE *file, ProgramType *program_type) {
 	switch (*program_type) {
+	case NONE:
+		fprintf(file, "none");
+		break;
 	case U8_T:
 		fprintf(file, "u8");
 		break;
@@ -168,7 +123,12 @@ void fprintf_program_type(FILE *file, ProgramType *program_type) {
 void fprintf_expression(FILE *file, Expression *expr) {
 	switch (expr->tag) {
 	case LET_E:
-		fprintf(file, "let %s = ", expr->let.var);
+		fprintf(file, "let ");
+		if (expr->let.type != NONE) {
+			fprintf(file, ": ");
+			fprintf_program_type(file, &expr->let.type);
+		}
+		fprintf(file, "%s = ", expr->let.var);
 		fprintf_expression(file, expr->let.e);
 		break;
 	case ADD_E:
@@ -332,9 +292,8 @@ bool parse_number(FILE *error, Tokens *tokens, uint32_t *index, Expression *e,
 			e->number.value = (uint32_t)i;
 			e->number.is_written_in_hexa = true;
 			return true;
-		} else {
-			index--;
 		}
+		index--;
 	}
 
 	// Number in decimal form
@@ -387,7 +346,34 @@ bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 	if (parse_char_literal(error, tokens, i, expr, true && should_work)) {
 		return true;
 	}
-	// Trying to parse :let var = e
+
+	// if (parse_token_type(error, tokens, i, LET, false)) {
+	// 	if (parse_identifier(error, tokens, i, &expr->let.var, true)) {
+	//
+	// 	} else {
+	// 		return false;
+	// 	}
+	// }
+
+	// Trying to parse : let var : type = e
+	prev_index = *i;
+	e = malloc(sizeof(*e));
+	if (parse_token_type(error, tokens, i, LET, false) &&
+	    parse_identifier(error, tokens, i, &expr->let.var,
+			     true && should_work) &&
+	    parse_token_type(error, tokens, i, COLON, false) &&
+	    parse_program_type(error, tokens, i, &expr->let.type, false) &&
+	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
+	    parse_expr_1(error, tokens, i, e, true && should_work)) {
+		expr->tag = LET_E;
+		expr->let.e = e;
+		return true;
+	}
+	free(e);
+	e = NULL;
+	*i = prev_index;
+
+	// Trying to parse : let var = e
 	prev_index = *i;
 	e = malloc(sizeof(*e));
 	if (parse_token_type(error, tokens, i, LET, false) &&
@@ -396,6 +382,7 @@ bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
 	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
 	    parse_expr_1(error, tokens, i, e, true && should_work)) {
 		expr->tag = LET_E;
+		expr->let.type = NONE;
 		expr->let.e = e;
 		return true;
 	}

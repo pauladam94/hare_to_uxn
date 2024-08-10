@@ -12,4 +12,4 @@ fn main() void = {
 	*output = 'l';
 	*output = 'd';
 	*output = '\n';
-}
+};

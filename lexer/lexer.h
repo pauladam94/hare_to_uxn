@@ -19,10 +19,13 @@ typedef enum {
 	LPAREN,	   // (
 	RPAREN,	   // )
 
-	FN,	// fn
-	LET,	// let
-	EQUAL,	// =
-	RETURN, // return
+	FN,	    // fn
+	LET,	    // let
+	EQUAL,	    // =
+	EQUALEQUAL, // ==
+	RETURN,	    // return
+	IF,	    // if
+	ELSE,	    // else
 
 	VOID, // void
 	U8,   // u8
@@ -32,7 +35,7 @@ typedef enum {
 	MINUS,	// -
 	MULT,	// *
 	DIVIDE, // /
-	
+
 	SINGLE_QUOTE, // '
 } TokenType;
 
@@ -52,12 +55,12 @@ typedef struct {
 // Input : file name
 // Ouput : list of tokens of the file name
 // Note : This functions deletes all the comments
-Tokens *lexify(FILE* error, FILE *file);
+Tokens *lexify(FILE *error, FILE *file);
 
 // Free the struct tokens but not any string allocated on the heap
 // void tokens_free(Tokens *tokens);
-void tokens_free_numbers(Tokens* tokens);
-void tokens_delete(Tokens* tokens);
+void tokens_free_numbers(Tokens *tokens);
+void tokens_delete(Tokens *tokens);
 
 void fprintf_token_type(FILE *file, TokenType *token_type);
 void fprintf_token(FILE *file, Token *token);

@@ -80,8 +80,8 @@ SFT, SFT2, SFTr, SFT2r, SFTk, SFT2k, SFTkr, SFT2kr,
 // clang-format on
 
 typedef struct { // 0x10000 bytes = 64ko of memory
+	char *comments[0x10000];
 	UxnInstruction memory[0x10000];
-	char* comments[0x100000];
 	bool is_instruction[0x10000];
 	bool is_written[0x10000];
 } UxnProgram;

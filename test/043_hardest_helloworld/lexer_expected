@@ -8,11 +8,7 @@ void
 let
 s
 =
-"
-hello
-world
-"
-;
+'hello world\n'
 let
 output
 =
@@ -27,11 +23,12 @@ i
 0
 ;
 i
-<
-11
+
+12
 ;
 i
-+=
++
+=
 1
 )
 {

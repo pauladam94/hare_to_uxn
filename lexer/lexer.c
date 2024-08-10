@@ -112,8 +112,17 @@ void fprintf_token_type(FILE *file, TokenType *token_type) {
 	case RETURN:
 		fprintf(file, "return");
 		break;
+	case IF:
+		fprintf(file, "if");
+		break;
+	case ELSE:
+		fprintf(file, "else");
+		break;
 	case EQUAL:
 		fprintf(file, "=");
+		break;
+	case EQUALEQUAL:
+		fprintf(file, "==");
 		break;
 	case U8:
 		fprintf(file, "u8");
@@ -148,7 +157,11 @@ void fprintf_token(FILE *file, Token *token) {
 		fprintf(file, "%s", token->text);
 		break;
 	case CHAR_LITERAL:
-		fprintf(file, "'%s'", token->text);
+		if (token->text[0] == '\n') {
+			fprintf(file, "'\\n'");
+		} else {
+			fprintf(file, "'%s'", token->text);
+		}
 		break;
 	case STRING_LITERAL:
 		fprintf(file, "\"%s\"", token->text);
@@ -259,11 +272,19 @@ char next_char(Stream *stream) {
 }
 
 Token next_char_literal(Stream *stream, char *c) {
+	Token token;
 	*c = next_char(stream);
 	if (*c == '\'') {
 		printf("don't accept empty char_literal");
 	}
-	Token token = token_one_char(stream, CHAR_LITERAL, *c);
+	if (*c == '\\') {
+		*c = next_char(stream);
+		if (*c == 'n') {
+			token = token_one_char(stream, CHAR_LITERAL, '\n');
+		}
+	} else {
+		token = token_one_char(stream, CHAR_LITERAL, *c);
+	}
 	*c = next_char(stream);
 	if (*c != '\'') {
 		printf("TODO make this a recoverable error\n");
@@ -401,7 +422,12 @@ Token next_token(Stream *stream, char *c, bool *empty_token) {
 		token = token_only_type(stream, RPAREN);
 		break;
 	case '=':
-		token = token_only_type(stream, EQUAL);
+		*c = next_char(stream);
+		if (*c == '=') {
+			*c = next_char(stream);
+			return token_only_type(stream, EQUALEQUAL);
+		}
+		return token_only_type(stream, EQUAL);
 		break;
 	case '+':
 		token = token_only_type(stream, PLUS);

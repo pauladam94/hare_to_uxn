@@ -2,6 +2,7 @@
 #include <stdint.h>
 
 typedef enum {
+	NONE,
 	U8_T,
 	U16_T,
 	VOID_T,
@@ -9,9 +10,10 @@ typedef enum {
 
 typedef struct Expression {
 	union {
-		struct { // let var = e
+		struct { // let var (: type) = e
 			char *var;
 			struct Expression *e;
+			ProgramType type;
 		} let;
 		struct { // lhs + rhs
 			struct Expression *lhs;
@@ -21,7 +23,7 @@ typedef struct Expression {
 			struct Expression *lhs;
 			struct Expression *rhs;
 		} sub;
-		struct { // list[0] ; ... ; list[lenght] ; last_expression
+		struct { // list[0] ; ... ; list[lenght] ;
 			struct Expression *list;
 			uint16_t length;
 		} sequence;

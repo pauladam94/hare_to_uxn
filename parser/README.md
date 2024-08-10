@@ -5,7 +5,6 @@ If the `tokens` given does not respect the grammar of the Hare programming
 language. Then the `parse` functions returns NULL and write errors in the
 `error` stream.
 
-
 PARSE FUNCTIONS API
 
 bool parse_[name] (
@@ -37,3 +36,16 @@ bool should_work
 The should_work boolean means that the fonction should work or it's an
 error. Inside a function, if you try to parse 'let', should_work = false
 because other possibility can be parsed. 'let' is not the only possibility.
+
+
+typedef {
+    FILE* error;
+    Tokens* tokens;
+    uint32_t index;
+    bool worked
+    bool should_work;
+    bool error_happened; // have to stop the parsing real error
+
+} ParseState; // parse_state->worked
+
+Expression parse_[name] (ParseState* parse_state);
