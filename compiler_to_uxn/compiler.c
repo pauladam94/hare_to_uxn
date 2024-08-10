@@ -11,7 +11,7 @@ typedef struct {
 } VariableTypes;
 
 typedef struct {
-	uint16_t size;
+	uint16_t size_program;
 	VariableTypes var_types;
 } FunctionLayout;
 
@@ -270,10 +270,11 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 	return NULL;
 }
 
-UxnPartialProgram *compile_function(FILE *error, Function *function) {
+UxnPartialProgram *compile_function(FILE *error, Function *function,
+				    bool layout) {
 	// TODO handle arguments
 	fprintf(error, "handle arguments and other");
-	return compile_expr(error, function->expr);
+	return compile_expr(error, function->expr, layout);
 }
 
 UxnProgram *compile_to_uxn(FILE *error, Ast *ast) {
@@ -311,11 +312,15 @@ UxnProgram *compile_to_uxn(FILE *error, Ast *ast) {
 		return program;
 	}
 
+
+
 	// 1. Get the size of all functions
+	ProgramLayout layout = compute_program_layout(ast);
 	// 2. Decide where to place them (one on top of each other)
 
 	// 3. Compile the different function
-	UxnPartialProgram *partial_program = compile_function(error, main);
+	UxnPartialProgram *partial_program =
+	    compile_function(error, main, false);
 
 	if (partial_program == NULL) {
 		ast_delete(ast);

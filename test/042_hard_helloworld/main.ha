@@ -1,5 +1,5 @@
 fn main() void = {
-    let output = 0x18;
+    let output : u8 = 0x18;
     *output = 'h';
     *output = 'e';
     *output = 'l';

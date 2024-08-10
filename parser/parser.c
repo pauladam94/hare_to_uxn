@@ -161,7 +161,7 @@ void fprintf_expression(FILE *file, Expression *expr) {
 		break;
 	case NUMBER_E:
 		if (expr->number.is_written_in_hexa) {
-			fprintf(file, "0%x", expr->number.value);
+			fprintf(file, "0x%x", expr->number.value);
 		} else {
 			fprintf(file, "%d", expr->number.value);
 		}
@@ -305,8 +305,8 @@ char *parse_identifier(ParseState *state, bool required) {
 
 Expression *parse_number(ParseState *state) {
 	// Number in hexadecimal form "0x123" (lex as '0' 'x123')
-	if (state->tokens->tokens[state->index].type == NUMBER &&
-	    strlen(state->tokens->tokens[state->index].text) == 0 &&
+	if(current_token(state).type == NUMBER &&
+	    strlen(current_token(state).text) == 1 &&
 	    state->tokens->tokens[state->index].text[0] == '0') {
 		state->index++;
 		int i;
