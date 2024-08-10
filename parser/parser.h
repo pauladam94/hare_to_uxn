@@ -80,8 +80,20 @@ typedef struct Expression {
 } Expression;
 
 typedef struct {
+	char *name;
+	ProgramType type;
+} Arg;
+
+typedef struct {
+	Arg* args;
+	uint8_t length;
+} Args;
+
+typedef struct {
 	Expression *expr;
 	char *name;
+	Args* args;
+	uint8_t length;
 	ProgramType type;
 } Function;
 
@@ -93,7 +105,7 @@ typedef struct {
 
 // Input : list of tokens
 // Ouput : Ast constructed from those tokens or NULL if there is a parsing error
-Ast *parse(FILE* error, Tokens *tokens);
+Ast *parse(FILE *error, Tokens *tokens);
 
 void ast_delete(Ast *ast);
 

@@ -1,7 +1,7 @@
 fn main() void = {
-	let a = foo();
+    let a : u8 = foo();
 };
 
 fn foo() u8 = {
-	return 8;
+    return 8;
 };

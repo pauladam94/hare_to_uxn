@@ -1,3 +1,3 @@
 fn main() void = {
-	let a = 'a';
+    let a : u8 = 'a';
 };

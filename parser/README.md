@@ -40,12 +40,13 @@ because other possibility can be parsed. 'let' is not the only possibility.
 
 typedef {
     FILE* error;
+
     Tokens* tokens;
     uint32_t index;
-    bool worked
+
+    bool worked;
     bool should_work;
     bool error_happened; // have to stop the parsing real error
-
 } ParseState; // parse_state->worked
 
 Expression parse_[name] (ParseState* parse_state);

@@ -1,4 +1,4 @@
 fn main() void = {
-	let a = 4;
-	return 6;
+    let a : u8 = 4;
+    return 6;
 };

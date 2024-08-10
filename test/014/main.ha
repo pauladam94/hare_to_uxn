@@ -1,3 +1,3 @@
 fn main()void={
-	return 42;
+    return 42;
 };

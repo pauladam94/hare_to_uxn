@@ -223,8 +223,7 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		return concat_program(e2, e1);
 	}
 	case DEREF_E: { // *e
-		UxnPartialProgram *e =
-		    compile_expr(error, expr->deref.e);
+		UxnPartialProgram *e = compile_expr(error, expr->deref.e);
 		if (e == NULL) {
 			break;
 		}
@@ -258,7 +257,8 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 	case CHAR_LITERAL_E: {
 		UxnPartialProgram *number = empty_partial_program();
 		append_instruction(number, NULL, true, LIT);
-		append_instruction(number, "char literal", false, expr->char_literal.c);
+		append_instruction(number, "char literal", false,
+				   expr->char_literal.c);
 		return number;
 	}
 	case STRING_LITERAL_E: {
@@ -276,7 +276,7 @@ UxnPartialProgram *compile_function(FILE *error, Function *function) {
 	return compile_expr(error, function->expr);
 }
 
-UxnProgram *compile_to_uxn(Ast *ast, FILE *error) {
+UxnProgram *compile_to_uxn(FILE *error, Ast *ast) {
 	// Initialize Program
 	UxnProgram *program = malloc(sizeof(*program));
 	for (int i = 0; i < 0x10000; i++) {

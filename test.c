@@ -126,7 +126,7 @@ int main(int argc, char **argv) {
 
 	if (ast == NULL) {
 		red();
-		printf("[Error parsing]\n");
+		printf("[Error parsing %s]\n", path_code);
 		reset();
 		return 0;
 	}
@@ -155,8 +155,8 @@ int main(int argc, char **argv) {
 
 	if (ast_2 == NULL) {
 		red();
-		printf(
-		    "[Error parsing %s]\n", path_result);
+		printf("[Error parsing again the result of first parse %s]\n",
+		       path_result);
 		reset();
 		return 0;
 	}
@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
 	sprintf(path_result, "%s/code.uxntal", path_dir);
 
 	error = fopen(path_error, "w");
-	UxnProgram *uxn_program = compile_to_uxn(ast, error);
+	UxnProgram *uxn_program = compile_to_uxn(error, ast);
 	fclose(error);
 
 	if (uxn_program == NULL) {

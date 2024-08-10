@@ -1,8 +1,8 @@
 fn main() void = {
-	let a = test();
+    let a = test();
 };
 
 fn test() u8 = {
-	main();
-	return 42;
+    main();
+    return 42;
 };

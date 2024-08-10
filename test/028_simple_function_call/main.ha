@@ -1,7 +1,7 @@
 fn main() void = {
-	main();
+    main();
 };
 
 fn test() u8 = {
-	12;
+    12;
 };

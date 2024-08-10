@@ -1,4 +1,4 @@
 fn main() u8 = {
-	42;
-	return 12;
+    42;
+    return 12;
 };

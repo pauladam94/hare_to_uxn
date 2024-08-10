@@ -4,6 +4,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+typedef struct {
+	FILE *error; // stream to output errors
+
+	Tokens *tokens; // list of tokens
+	uint32_t index; // where we are in the tokens
+
+	bool abort; // have to stop the parsing
+} ParseState;	    // parse_state->worked
+
+Token current_token(ParseState *state) {
+	return state->tokens->tokens[state->index];
+}
+
 ///// ----- EXPRESSION FUNCTIONS ----- /////
 
 /// Deletes completely recursively what expression points to
@@ -124,11 +137,12 @@ void fprintf_expression(FILE *file, Expression *expr) {
 	switch (expr->tag) {
 	case LET_E:
 		fprintf(file, "let ");
+		fprintf(file, "%s", expr->let.var);
 		if (expr->let.type != NONE) {
 			fprintf(file, ": ");
 			fprintf_program_type(file, &expr->let.type);
 		}
-		fprintf(file, "%s = ", expr->let.var);
+		fprintf(file, " = ");
 		fprintf_expression(file, expr->let.e);
 		break;
 	case ADD_E:
@@ -208,339 +222,389 @@ void fprintf_ast(FILE *file, Ast *ast) {
 	}
 }
 
-bool parse_token_type(FILE *error, Tokens *tokens, uint32_t *index,
-		      TokenType token_type, bool should_work) {
-	if (tokens->tokens[*index].type == token_type) {
-		*index += 1;
+void fprintf_line_column(ParseState *state) {
+	fprintf(state->error,
+		"At line %d, column %d: ", current_token(state).line,
+		current_token(state).column);
+}
+
+void fprintf_current_token(ParseState *state) {
+	fprintf(state->error, "'");
+	fprintf_token(state->error, &state->tokens->tokens[state->index]);
+	// fprintf(state->error, "' a");
+	// fprintf_token_type(state->error,
+	// 		   &state->tokens->tokens[state->index].type);
+}
+
+///// ----- PARSE FUNCTIONS ----- /////
+
+bool parse_token_type(ParseState *state, TokenType token_type, bool required) {
+	if (current_token(state).type == token_type) {
+		state->index++;
 		return true;
 	}
-	if (should_work) {
-		fprintf(error, "Expected '");
-		fprintf_token_type(error, &token_type);
-		fprintf(error, "' at line %d and column %d but got '",
-			tokens->tokens[*index].line,
-			tokens->tokens[*index].column);
-		fprintf_token(error, &tokens->tokens[*index]);
-		fprintf(error, "' a ");
-		fprintf_token_type(error, &tokens->tokens[*index].type);
-		fprintf(error, "\n");
+	if (required) {
+		fprintf_line_column(state);
+		fprintf(state->error, "Expected a '");
+		fprintf_token_type(state->error, &token_type);
+		fprintf(state->error, "' but got ");
+		fprintf_current_token(state);
+		fprintf(state->error, "\n");
 	}
 	return false;
 }
 
-bool parse_program_type(FILE *error, Tokens *tokens, uint32_t *index,
-			ProgramType *program_type, bool should_work) {
-	if (tokens->tokens[*index].type == VOID) {
-		*program_type = VOID_T;
-		*index += 1;
-		return true;
-	} else if (tokens->tokens[*index].type == U8) {
-		*program_type = U8_T;
-		*index += 1;
-		return true;
-	} else if (tokens->tokens[*index].type == U16) {
-		*program_type = U16_T;
-		*index += 1;
-		return true;
+ProgramType *parse_program_type(ParseState *state, bool required) {
+	if (current_token(state).type == VOID) {
+		state->index++;
+		ProgramType *type = malloc(sizeof(*type));
+		*type = VOID_T;
+		return type;
+	} else if (current_token(state).type == U8) {
+		state->index++;
+		ProgramType *type = malloc(sizeof(*type));
+		*type = U8_T;
+		return type;
+	} else if (current_token(state).type == U16) {
+		state->index++;
+		ProgramType *type = malloc(sizeof(*type));
+		*type = U16_T;
+		return type;
 	}
 
-	if (should_work) {
-		fprintf(error,
-			"Expected program type at line %d and column "
-			"%d but got '",
-			tokens->tokens[*index].line,
-			tokens->tokens[*index].column);
-		fprintf_token(error, &tokens->tokens[*index]);
-		fprintf(error, "' a ");
-		fprintf_token_type(error, &tokens->tokens[*index].type);
-		fprintf(error, "\n");
+	if (required) {
+		fprintf_line_column(state);
+		fprintf(state->error, "Expected type but got ");
+		fprintf_current_token(state);
+		fprintf(state->error, "\n");
 	}
-	return false;
+
+	ProgramType *type = malloc(sizeof(*type));
+	*type = U16_T;
+	return type;
 }
 
-bool parse_identifier(FILE *error, Tokens *tokens, uint32_t *index, char **s,
-		      bool should_work) {
-	if (tokens->tokens[*index].type == IDENTIFIER) {
-		*s = tokens->tokens[*index].text;
-		*index += 1;
-		return true;
+char *parse_identifier(ParseState *state, bool required) {
+	Token token = current_token(state);
+	if (token.type == IDENTIFIER) {
+		state->index++;
+		return token.text;
 	}
-	if (should_work) {
-		fprintf(error, "expected identifier line %d and column %d\n",
-			tokens->tokens[*index].line,
-			tokens->tokens[*index].column);
-		fprintf_token(error, &tokens->tokens[*index]);
-		fprintf(error, "' a ");
-		fprintf_token_type(error, &tokens->tokens[*index].type);
-		fprintf(error, "\n");
+	if (required) {
+		fprintf_line_column(state);
+		fprintf(state->error, "Expected identifier but got ");
+		fprintf_current_token(state);
+		fprintf(state->error, "\n");
 	}
-	return false;
+	return NULL;
 }
 
-bool parse_number(FILE *error, Tokens *tokens, uint32_t *index, Expression *e,
-		  bool should_work) {
-
+Expression *parse_number(ParseState *state) {
 	// Number in hexadecimal form "0x123" (lex as '0' 'x123')
-	if (tokens->tokens[*index].type == NUMBER &&
-	    strlen(tokens->tokens[*index].text) == 0 &&
-	    tokens->tokens[*index].text[0] == '0') {
-		*index += 1;
+	if (state->tokens->tokens[state->index].type == NUMBER &&
+	    strlen(state->tokens->tokens[state->index].text) == 0 &&
+	    state->tokens->tokens[state->index].text[0] == '0') {
+		state->index++;
 		int i;
-		if (sscanf(tokens->tokens[*index].text + 1, "%x", &i) != EOF) {
-			*index += 1;
+		Expression *e = malloc(sizeof(*e));
+		if (sscanf(current_token(state).text + 1, "%x", &i) != EOF) {
+			state->index++;
 			e->tag = NUMBER_E;
 			e->number.value = (uint32_t)i;
 			e->number.is_written_in_hexa = true;
-			return true;
+			return e;
 		}
-		index--;
+		state->index--;
 	}
 
 	// Number in decimal form
-	if (tokens->tokens[*index].type == NUMBER) {
+	if (current_token(state).type == NUMBER) {
+		Expression *e = malloc(sizeof(*e));
 		e->tag = NUMBER_E;
-		e->number.value = (uint32_t)atoi(tokens->tokens[*index].text);
+		e->number.value =
+		    (uint32_t)atoi(state->tokens->tokens[state->index].text);
 		// Here this cannot be free
 		// because it is not necessarely the last time we look
 		// at it
 		e->number.is_written_in_hexa = false;
-		*index += 1;
-		return true;
+		state->index++;
+		return e;
 	}
-	return false;
+	return NULL;
 }
 
-bool parse_char_literal(FILE *error, Tokens *tokens, uint32_t *index,
-			Expression *expr, bool should_work) {
-	if (tokens->tokens[*index].type == CHAR_LITERAL) {
-		expr->tag = CHAR_LITERAL_E;
-		expr->char_literal.c = tokens->tokens[*index].text[0];
-		free(tokens->tokens[*index].text);
-		*index += 1;
-		return true;
+Expression *parse_char_literal(ParseState *state) {
+	if (current_token(state).type == CHAR_LITERAL) {
+		Expression *e = malloc(sizeof(*e));
+		e->tag = CHAR_LITERAL_E;
+		e->char_literal.c = current_token(state).text[0];
+		free(current_token(state).text);
+		state->index++;
+		return e;
 	}
-	return false;
+	return NULL;
 }
 
 // TODO
-bool parse_args_call(FILE *error);
+Expression *parse_args_call(ParseState *state, bool required);
 // TODO
-bool parse_args_def(FILE *error);
+Expression *parse_args_def(ParseState *state, bool required);
 
-bool parse_let(FILE *error, Tokens *tokens, uint32_t *index, Expression *expr,
-	       bool should_work) {
-	return false;
+Expression *parse_expr_1(ParseState *state, bool required);
+
+Expression *parse_let(ParseState *state) {
+	if (!parse_token_type(state, LET, false)) {
+		state->abort = false;
+		return NULL;
+	}
+	char *var = parse_identifier(state, true);
+	if (var == NULL) {
+		state->abort = true;
+		return NULL;
+	}
+	if (!parse_token_type(state, COLON, true)) {
+		state->abort = true;
+		return NULL;
+	}
+
+	ProgramType *type = parse_program_type(state, true);
+	if (type == NULL || !parse_token_type(state, EQUAL, true)) {
+		state->abort = true;
+		return NULL;
+	}
+	Expression *e = parse_expr_1(state, true);
+	if (state->abort || e == NULL) {
+		state->abort = true;
+		return NULL;
+	}
+	Expression *expr = malloc(sizeof(*expr));
+	expr->tag = LET_E;
+	expr->let.e = e;
+	expr->let.type = *type;
+	free(type);
+	expr->let.var = var;
+	return expr;
 }
 
-bool parse_expr_1(FILE *error, Tokens *tokens, uint32_t *index,
-		  Expression *expr, bool should_work);
-
-bool parse_expr_2(FILE *error, Tokens *tokens, uint32_t *i, Expression *expr,
-		  bool should_work) {
-	uint32_t prev_index;
-	Expression *e;
-	Expression *e1;
-	Expression *e2;
-
-	// Trying to parse : 'char'
-	if (parse_char_literal(error, tokens, i, expr, true && should_work)) {
-		return true;
+Expression *parse_deref_assign_or_deref(ParseState *state) {
+	if (!parse_token_type(state, MULT, false)) {
+		state->abort = false;
+		return NULL;
 	}
-
-	// if (parse_token_type(error, tokens, i, LET, false)) {
-	// 	if (parse_identifier(error, tokens, i, &expr->let.var, true)) {
-	//
-	// 	} else {
-	// 		return false;
-	// 	}
-	// }
-
-	// Trying to parse : let var : type = e
-	prev_index = *i;
-	e = malloc(sizeof(*e));
-	if (parse_token_type(error, tokens, i, LET, false) &&
-	    parse_identifier(error, tokens, i, &expr->let.var,
-			     true && should_work) &&
-	    parse_token_type(error, tokens, i, COLON, false) &&
-	    parse_program_type(error, tokens, i, &expr->let.type, false) &&
-	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
-	    parse_expr_1(error, tokens, i, e, true && should_work)) {
-		expr->tag = LET_E;
-		expr->let.e = e;
-		return true;
+	Expression *e1 = parse_expr_1(state, true);
+	if (state->abort || e1 == NULL) {
+		state->abort = true;
+		return NULL;
 	}
-	free(e);
-	e = NULL;
-	*i = prev_index;
-
-	// Trying to parse : let var = e
-	prev_index = *i;
-	e = malloc(sizeof(*e));
-	if (parse_token_type(error, tokens, i, LET, false) &&
-	    parse_identifier(error, tokens, i, &expr->let.var,
-			     true && should_work) &&
-	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
-	    parse_expr_1(error, tokens, i, e, true && should_work)) {
-		expr->tag = LET_E;
-		expr->let.type = NONE;
-		expr->let.e = e;
-		return true;
-	}
-	free(e);
-	e = NULL;
-	*i = prev_index;
-
-	// Trying to parse : *e1 = e2
-	prev_index = *i;
-	e1 = malloc(sizeof(*e1));
-	e2 = malloc(sizeof(*e2));
-	if (parse_token_type(error, tokens, i, MULT, false) &&
-	    parse_expr_1(error, tokens, i, e1, true && should_work) &&
-	    parse_token_type(error, tokens, i, EQUAL, true && should_work) &&
-	    parse_expr_1(error, tokens, i, e2, true && should_work)) {
-		expr->tag = DEREF_ASSIGN_E;
-		expr->deref_assign.e1 = e1;
-		expr->deref_assign.e2 = e2;
-		return true;
-	}
-	free(e1);
-	free(e2);
-	e1 = NULL;
-	e2 = NULL;
-	*i = prev_index;
-
-	// Trying to parse : *e
-	prev_index = *i;
-	e = malloc(sizeof(*e));
-	if (parse_token_type(error, tokens, i, MULT, false) &&
-	    parse_expr_1(error, tokens, i, e, true && should_work)) {
+	if (!parse_token_type(state, EQUAL, false)) {
+		Expression *expr = malloc(sizeof(*expr));
 		expr->tag = DEREF_E;
-		expr->deref.e = e;
-		return true;
+		expr->deref.e = e1;
+		return expr;
 	}
-	free(e);
-	e = NULL;
-	*i = prev_index;
-
-	// Try to parse : return e
-	prev_index = *i;
-	e = malloc(sizeof(*e));
-	if (parse_token_type(error, tokens, i, RETURN, false) &&
-	    parse_expr_1(error, tokens, i, e, true && should_work)) {
-		expr->tag = RETURN_E;
-		expr->ret.e = e;
-		return true;
+	Expression *e2 = parse_expr_1(state, true);
+	if (state->abort || e2 == NULL) {
+		state->abort = true;
+		return NULL;
 	}
-	free(e);
-	e = NULL;
-	*i = prev_index;
+	Expression *expr = malloc(sizeof(*expr));
+	expr->tag = DEREF_ASSIGN_E;
+	expr->deref_assign.e1 = e1;
+	expr->deref_assign.e2 = e2;
+	return expr;
+}
 
-	// Try to parse : var = e
-	prev_index = *i;
-	e = malloc(sizeof(*e));
-	if (parse_identifier(error, tokens, i, &expr->assign.var, false) &&
-	    parse_token_type(error, tokens, i, EQUAL, false) &&
-	    parse_expr_1(error, tokens, i, e, true && should_work)) {
+Expression *parse_return(ParseState *state) {
+	if (!parse_token_type(state, RETURN, false)) {
+		state->abort = false;
+		return NULL;
+	}
+	Expression *e = parse_expr_1(state, true);
+	if (state->abort || e == NULL) {
+		state->abort = true;
+		return NULL;
+	}
+	Expression *expr = malloc(sizeof(*expr));
+	expr->tag = RETURN_E;
+	expr->ret.e = e;
+	return expr;
+}
+
+Expression *parse_func_call_or_var_assign_or_var(ParseState *state) {
+	char *identifier = parse_identifier(state, false);
+	if (identifier == NULL) {
+		state->abort = false;
+		return NULL;
+	}
+	if (parse_token_type(state, LPAREN, false)) {
+		if (parse_token_type(state, RPAREN, true)) {
+			Expression *expr = malloc(sizeof(*expr));
+			expr->tag = FUNCTION_CALL_E;
+			expr->function_call.name = identifier;
+			return expr;
+		} else {
+			state->abort = true;
+			return NULL;
+		}
+	}
+
+	if (parse_token_type(state, EQUAL, false)) {
+		Expression *e = parse_expr_1(state, true);
+		if (state->abort || e == NULL) {
+			state->abort = true;
+			return NULL;
+		}
+		Expression *expr = malloc(sizeof(*expr));
 		expr->tag = ASSIGN_E;
 		expr->assign.e = e;
-		return true;
-	}
-	free(e);
-	*i = prev_index;
-
-	// Try to parse : function_name ( ) TODO args
-	prev_index = *i;
-	if (parse_identifier(error, tokens, i, &expr->function_call.name,
-			     false) &&
-	    parse_token_type(error, tokens, i, LPAREN, false) &&
-	    parse_token_type(error, tokens, i, RPAREN, true && should_work)) {
-		expr->tag = FUNCTION_CALL_E;
-		return true;
-	}
-	*i = prev_index;
-
-	if (parse_identifier(error, tokens, i, &expr->variable.name, false)) {
-		expr->tag = VARIABLE_E;
-		return true;
+		expr->assign.var = identifier;
+		return expr;
 	}
 
-	if (parse_number(error, tokens, i, expr, false)) {
-		return true;
+	Expression *expr = malloc(sizeof(*expr));
+	expr->tag = VARIABLE_E;
+	expr->variable.name = identifier;
+	return expr;
+}
+
+Expression *parse_expr_2(ParseState *state, bool required) {
+	Expression *e = NULL;
+
+	// Char Literal: 'c'
+	e = parse_char_literal(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
 	}
 
-	if (should_work) {
-		fprintf(error,
+	// TODO string literal
+
+	// Let: let var = e
+	e = parse_let(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
+	}
+
+	// Deref Assign or Deref:  *e = e  OR  *e
+	e = parse_deref_assign_or_deref(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
+	}
+
+	// Return : return e
+	e = parse_return(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
+	}
+
+	// Function call OR Assign OR Var : ident() OR ident = e OR ident
+	e = parse_func_call_or_var_assign_or_var(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
+	}
+
+	// NUMBER : n
+	e = parse_number(state);
+	if (state->abort) {
+		return NULL;
+	}
+	if (e != NULL) {
+		return e;
+	}
+
+	if (required) {
+		fprintf(state->error,
 			"Expected an Expression2 at line %d and column %d",
-			tokens->tokens[*i].line, tokens->tokens[*i].column);
-		fprintf(error, "\n");
+			current_token(state).line, current_token(state).column);
+		fprintf(state->error, "\n");
 	}
-	return false;
+	return NULL;
 }
 
-bool parse_expr_1(FILE *error, Tokens *tokens, uint32_t *index,
-		  Expression *expr, bool should_work) {
-	uint32_t prev_index;
-
-	Expression *lhs = malloc(sizeof(*lhs));
-
-	if (!parse_expr_2(error, tokens, index, lhs, false)) {
-		if (should_work) {
-			fprintf(error,
-				"Expected an Expression1 at line %d "
-				"and column "
-				"%d\n",
-				tokens->tokens[*index].line,
-				tokens->tokens[*index].column);
+Expression *parse_expr_1(ParseState *state, bool required) {
+	Expression *lhs = parse_expr_2(state, true);
+	if (state->abort || lhs == NULL) {
+		if (required) {
+			fprintf_line_column(state);
+			fprintf(state->error, "Expected an Expression1 \n");
 		}
-		free(lhs);
-		return false;
+		return NULL;
 	}
 
-	if (parse_token_type(error, tokens, index, PLUS, false)) {
-		Expression *rhs = malloc(sizeof(*rhs));
-		if (parse_expr_1(error, tokens, index, rhs,
-				 true && should_work)) {
-			expr->tag = ADD_E;
-			expr->add.lhs = lhs;
-			expr->add.rhs = rhs;
-			return true;
+	if (parse_token_type(state, PLUS, false)) {
+		Expression *rhs = parse_expr_1(state, true);
+		if (state->abort || rhs == NULL) {
+			state->abort = required;
+			free(lhs);
+			return NULL;
 		}
-		free(rhs);
+
+		Expression *expr = malloc(sizeof(*expr));
+		expr->tag = ADD_E;
+		expr->add.lhs = lhs;
+		expr->add.rhs = rhs;
+		return expr;
 	}
 
-	if (parse_token_type(error, tokens, index, MINUS, false)) {
-		Expression *rhs = malloc(sizeof(*rhs));
-		if (parse_expr_1(error, tokens, index, rhs, should_work)) {
-			expr->tag = SUB_E;
-			expr->add.lhs = lhs;
-			expr->add.rhs = rhs;
-			return true;
+	if (parse_token_type(state, MINUS, false)) {
+		Expression *rhs = parse_expr_1(state, true);
+		if (state->abort || rhs == NULL) {
+			state->abort = required;
+			free(lhs);
+			return NULL;
 		}
-		free(rhs);
+		Expression *expr = malloc(sizeof(*expr));
+		expr->tag = SUB_E;
+		expr->sub.lhs = lhs;
+		expr->sub.rhs = rhs;
+		return expr;
 	}
 
-	*expr = *lhs;
-	free(lhs);
-	return true;
+	return lhs;
 }
 
-bool parse_expr(FILE *error, Tokens *tokens, uint32_t *index, Expression *expr,
-		bool should_work) {
-	bool expression_is_empty = true;
-
-	if (!parse_token_type(error, tokens, index, LBRACE, true)) {
-		return false;
+Expression *parse_expr(ParseState *state) {
+	if (!parse_token_type(state, LBRACE, false)) {
+		return NULL;
 	}
 
-	// trying parsing : (expression ;)*
-	uint32_t prev_index = *index;
-	Expression expr_next;
-	while (parse_expr_1(error, tokens, index, &expr_next, false) &&
-	       parse_token_type(error, tokens, index, SEMICOLON,
-				true && should_work)) {
-		prev_index = *index;
-		if (expression_is_empty) {
-			expression_is_empty = false;
+	Expression *expr = NULL;
+
+	// Sequence : (expression ;)*
+	while (true) {
+		bool required = false;
+		if (expr == NULL) {
+			required = true;
+		}
+		Expression *expr_next = parse_expr_1(state, required);
+		if (state->abort) {
+			return NULL;
+		}
+		if (expr_next == NULL) {
+			break;
+		}
+
+		if (!parse_token_type(state, SEMICOLON, true)) {
+			state->abort = true;
+			return NULL;
+		}
+
+		if (expr == NULL) {
+			expr = malloc(sizeof(*expr));
 			expr->tag = SEQUENCE_E;
 			expr->sequence.length = 0;
 			expr->sequence.list = NULL;
@@ -556,75 +620,104 @@ bool parse_expr(FILE *error, Tokens *tokens, uint32_t *index, Expression *expr,
 			free(prev_list);
 		}
 
-		expr->sequence.list[expr->sequence.length - 1] = expr_next;
-	}
-	*index = prev_index;
-
-	if (expression_is_empty && should_work) {
-		fprintf(error, "Empty block are not allowed\n");
-		return false;
+		expr->sequence.list[expr->sequence.length - 1] = *expr_next;
+		free(expr_next);
 	}
 
-	if (!parse_token_type(error, tokens, index, RBRACE, true)) {
-		return false;
+	if (expr == NULL && state->abort) {
+		fprintf(state->error, "Empty block are not allowed\n");
+		return NULL;
 	}
 
-	return true;
+	if (!parse_token_type(state, RBRACE, true)) {
+		state->abort = true;
+		return NULL;
+	}
+
+	return expr;
 }
 
 // fn indentifier () type = expression
-bool parse_function(FILE *error, Tokens *tokens, uint32_t *index,
-		    Function *function) {
-	char *function_name;
+Function *parse_function(ParseState *state, bool required) {
 	uint32_t prev_index;
 
-	Expression *expression = malloc(sizeof(*expression));
-	prev_index = *index;
-	if (parse_token_type(error, tokens, index, FN, true) &&
-	    parse_identifier(error, tokens, index, &function_name, true) &&
-	    parse_token_type(error, tokens, index, LPAREN, true) &&
-	    parse_token_type(error, tokens, index, RPAREN, true) &&
-	    parse_program_type(error, tokens, index, &function->type, true) &&
-	    parse_token_type(error, tokens, index, EQUAL, true) &&
-	    parse_expr(error, tokens, index, expression, true)) {
-		function->name = function_name;
-		function->expr = expression;
-		return true;
-	} else {
-		free(expression);
+	if (!parse_token_type(state, FN, false)) {
+		return NULL;
 	}
-	*index = prev_index;
 
-	return false;
+	char *name = parse_identifier(state, required);
+	if (name == NULL) {
+		state->abort = required;
+		return NULL;
+	}
+
+	if (!parse_token_type(state, LPAREN, true)) {
+		state->abort = required;
+		return NULL;
+	}
+
+	if (!parse_token_type(state, RPAREN, true)) {
+		state->abort = required;
+		return NULL;
+	}
+
+	ProgramType *type = parse_program_type(state, true);
+	if (type == NULL) {
+		state->abort = required;
+		return NULL;
+	}
+
+	if (!parse_token_type(state, EQUAL, true)) {
+		state->abort = required;
+		return NULL;
+	}
+
+	Expression *expr = parse_expr(state);
+	if (state->abort || expr == NULL) {
+		state->abort = required;
+		return NULL;
+	}
+
+	Function *function = malloc(sizeof(*function));
+	function->name = name;
+	function->expr = expr;
+	function->type = *type;
+	free(type);
+	return function;
 }
 
 // Input : list of tokens
 // Ouput : result of an Ast constructed from those tokens
 Ast *parse(FILE *error, Tokens *tokens) {
-	uint32_t index = 0;
 	Ast *ast = ast_new();
 
-	while (index < tokens->length) {
-		Function function;
-		if (parse_function(error, tokens, &index, &function)) {
-			if (parse_token_type(error, tokens, &index, SEMICOLON,
-					     true)) {
-				ast_append_function(ast, function);
-			} else {
-				fprintf(error, "Function should be "
-					       "separated by ';'");
-				// expression_free(function.expr);
-				return false;
-			}
-		} else {
+	ParseState state;
+	state.error = error;
+	state.tokens = tokens;
+	state.index = 0;
+	state.abort = false;
+
+	while (state.index < state.tokens->length) {
+		Function *function = parse_function(&state, true);
+		if (state.abort) {
+			return NULL;
+		}
+		if (function == NULL) {
 			break;
+		}
+		if (parse_token_type(&state, SEMICOLON, true)) {
+			ast_append_function(ast, *function);
+			free(function);
+		} else {
+			fprintf_line_column(&state);
+			fprintf(error, "Missing ';' at end of function\n");
+			return false;
 		}
 	}
 
-	if (index != tokens->length) {
+	if (state.index != tokens->length) {
 		ast_delete(ast);
 		ast = NULL;
-		fprintf(error, "Error during Parsing\n");
 	}
 	tokens_free_numbers(tokens);
 	free(tokens);

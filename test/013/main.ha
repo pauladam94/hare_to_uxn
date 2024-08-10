@@ -1,5 +1,5 @@
 fn main() void = {
-	let a = 4;
-	a = 12;
-	42;
+    let a : u8 = 4;
+    a = 12;
+    42;
 };
