@@ -10,8 +10,9 @@ typedef struct {
 	Tokens *tokens; // list of tokens
 	uint32_t index; // where we are in the tokens
 
-	bool abort; // have to stop the parsing
-} ParseState;	    // parse_state->worked
+	bool abort;  // have to stop the parsing
+	bool failed; // useful for functions that don't return a pointer
+} ParseState;	     // parse_state->worked
 
 Token current_token(ParseState *state) {
 	return state->tokens->tokens[state->index];
@@ -205,7 +206,15 @@ void fprintf_expression(FILE *file, Expression *expr) {
 }
 
 void fprintf_function(FILE *file, Function *function) {
-	fprintf(file, "fn %s () ", function->name);
+	fprintf(file, "fn %s (", function->name);
+	for (int i = 0; i < function->args.length; i++) {
+		fprintf(file, "%s :", function->args.args[i].name);
+		fprintf_program_type(file, &function->args.args[i].type);
+		if (i != function->args.length - 1) {
+			fprintf(file, ",");
+		}
+	}
+	fprintf(file, ") ");
 	fprintf_program_type(file, &function->type);
 	fprintf(file, " = {\n");
 	fprintf_expression(file, function->expr);
@@ -254,22 +263,16 @@ bool parse_token_type(ParseState *state, TokenType token_type, bool required) {
 	return false;
 }
 
-ProgramType *parse_program_type(ParseState *state, bool required) {
+ProgramType parse_program_type(ParseState *state, bool required) {
 	if (current_token(state).type == VOID) {
 		state->index++;
-		ProgramType *type = malloc(sizeof(*type));
-		*type = VOID_T;
-		return type;
+		return VOID_T;
 	} else if (current_token(state).type == U8) {
 		state->index++;
-		ProgramType *type = malloc(sizeof(*type));
-		*type = U8_T;
-		return type;
+		return U8_T;
 	} else if (current_token(state).type == U16) {
 		state->index++;
-		ProgramType *type = malloc(sizeof(*type));
-		*type = U16_T;
-		return type;
+		return U16_T;
 	}
 
 	if (required) {
@@ -281,7 +284,8 @@ ProgramType *parse_program_type(ParseState *state, bool required) {
 
 	ProgramType *type = malloc(sizeof(*type));
 	*type = U16_T;
-	return type;
+	state->failed = true;
+	return VOID_T;
 }
 
 char *parse_identifier(ParseState *state, bool required) {
@@ -367,8 +371,9 @@ Expression *parse_let(ParseState *state) {
 		return NULL;
 	}
 
-	ProgramType *type = parse_program_type(state, true);
-	if (type == NULL || !parse_token_type(state, EQUAL, true)) {
+	ProgramType type = parse_program_type(state, true);
+	if (state->failed || !parse_token_type(state, EQUAL, true)) {
+		state->failed = true;
 		state->abort = true;
 		return NULL;
 	}
@@ -380,8 +385,7 @@ Expression *parse_let(ParseState *state) {
 	Expression *expr = malloc(sizeof(*expr));
 	expr->tag = LET_E;
 	expr->let.e = e;
-	expr->let.type = *type;
-	free(type);
+	expr->let.type = type;
 	expr->let.var = var;
 	return expr;
 }
@@ -637,6 +641,53 @@ Expression *parse_expr(ParseState *state) {
 	return expr;
 }
 
+Args parse_args(ParseState *state) {
+	Args args;
+	args.length = 0;
+	args.args = NULL;
+	while (true) {
+		Arg arg;
+		bool required = true;
+		if (args.args == NULL) {
+			required = false;
+		}
+		arg.name = parse_identifier(state, required);
+		if (arg.name == NULL) {
+			break;
+		}
+
+		if (!parse_token_type(state, COLON, true)) {
+			state->abort = true;
+			state->failed = true;
+			return args;
+		}
+
+		ProgramType arg_type = parse_program_type(state, true);
+		if (state->failed) {
+			state->abort = true;
+			return args;
+		}
+
+		args.length++;
+		Arg *prev_args = args.args;
+		args.args = malloc(sizeof(Arg) * args.length);
+		for (int i = 0; i < args.length - 1; i++) {
+			args.args[i] = prev_args[i];
+		}
+		if (prev_args != NULL) {
+			free(prev_args);
+		}
+
+		arg.type = arg_type;
+		args.args[args.length - 1] = arg;
+
+		if (!parse_token_type(state, COMMA, false)) {
+			return args;
+		}
+	}
+	return args;
+}
+
 // fn indentifier () type = expression
 Function *parse_function(ParseState *state, bool required) {
 	uint32_t prev_index;
@@ -656,13 +707,19 @@ Function *parse_function(ParseState *state, bool required) {
 		return NULL;
 	}
 
+	Args args = parse_args(state);
+	if (state->abort || state->failed) {
+		state->abort = required;
+		return NULL;
+	}
+
 	if (!parse_token_type(state, RPAREN, true)) {
 		state->abort = required;
 		return NULL;
 	}
 
-	ProgramType *type = parse_program_type(state, true);
-	if (type == NULL) {
+	ProgramType type = parse_program_type(state, true);
+	if (state->failed) {
 		state->abort = required;
 		return NULL;
 	}
@@ -681,8 +738,8 @@ Function *parse_function(ParseState *state, bool required) {
 	Function *function = malloc(sizeof(*function));
 	function->name = name;
 	function->expr = expr;
-	function->type = *type;
-	free(type);
+	function->type = type;
+	function->args = args;
 	return function;
 }
 
@@ -696,6 +753,7 @@ Ast *parse(FILE *error, Tokens *tokens) {
 	state.tokens = tokens;
 	state.index = 0;
 	state.abort = false;
+	state.failed = false;
 
 	while (state.index < state.tokens->length) {
 		Function *function = parse_function(&state, true);

@@ -1,5 +1,5 @@
 fn main() void = {
-    let a = test();
+    let a : u8 = test();
 };
 
 fn test() u8 = {

@@ -85,15 +85,15 @@ typedef struct {
 } Arg;
 
 typedef struct {
-	Arg* args;
 	uint8_t length;
+	Arg *args;
 } Args;
 
 typedef struct {
 	Expression *expr;
 	char *name;
-	Args* args;
-	uint8_t length;
+
+	Args args;
 	ProgramType type;
 } Function;
 
