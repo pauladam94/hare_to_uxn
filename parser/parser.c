@@ -96,7 +96,7 @@ Ast *ast_new(void) {
 }
 
 // function should not be NULL
-void ast_append_function(Ast *ast, Function function) {
+void ast_append(Ast *ast, Function function) {
 	ast->length += 1;
 	if (ast->length > ast->capacity) {
 		if (ast->capacity == 0) {
@@ -690,8 +690,6 @@ Args parse_args(ParseState *state) {
 
 // fn indentifier () type = expression
 Function *parse_function(ParseState *state, bool required) {
-	uint32_t prev_index;
-
 	if (!parse_token_type(state, FN, false)) {
 		return NULL;
 	}
@@ -764,7 +762,7 @@ Ast *parse(FILE *error, Tokens *tokens) {
 			break;
 		}
 		if (parse_token_type(&state, SEMICOLON, true)) {
-			ast_append_function(ast, *function);
+			ast_append(ast, *function);
 			free(function);
 		} else {
 			fprintf_line_column(&state);

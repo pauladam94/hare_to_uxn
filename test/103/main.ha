@@ -1,0 +1,5 @@
+fn main()void = {
+    a_234;
+};
+
+fn foo() void = { 42; };

@@ -27,3 +27,11 @@ Those are written in the order they are generated.
 
 ## Execution
 - `output_result`: standard output of the execution of `code.rom`
+
+
+# Structures of test
+
+- `000` to `099` are test that should produce an error (during any test of testing)
+- `100` to `199` are lexer, parser unit test
+- `200` to `299` are unit test for compiler and execution
+- `300` to `399` are real programs that produces output to test

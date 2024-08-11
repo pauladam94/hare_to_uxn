@@ -76,18 +76,18 @@ AND, AND2, ANDr, AND2r, ANDk, AND2k, ANDkr, AND2kr,
 ORA, ORA2, ORAr, ORA2r, ORAk, ORA2k, ORAkr, ORA2kr,
 EOR, EOR2, EORr, EOR2r, EORk, EOR2k, EORkr, EOR2kr,
 SFT, SFT2, SFTr, SFT2r, SFTk, SFT2k, SFTkr, SFT2kr,
-} UxnInstruction;
+} Instruction;
 // clang-format on
 
 typedef struct { // 0x10000 bytes = 64ko of memory
 	char *comments[0x10000];
-	UxnInstruction memory[0x10000];
+	Instruction memory[0x10000];
 	bool is_instruction[0x10000];
 	bool is_written[0x10000];
-} UxnProgram;
+} Program;
 
 // clang-format off
-void fprintf_uxn_instruction(FILE *file, UxnInstruction *inst);
+void fprintf_uxn_instruction(FILE *file, Instruction *inst);
 // clang-format off
 
-void fprintf_uxn_program(FILE *file, UxnProgram *uxn_program);
+void fprintf_uxn_program(FILE *file, Program *uxn_program);

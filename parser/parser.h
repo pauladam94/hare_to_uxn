@@ -42,7 +42,7 @@ typedef struct Expression {
 			char *name;
 		} variable;
 		struct { // value
-			uint32_t value;
+			uint16_t value;
 			bool is_written_in_hexa;
 		} number;
 		struct { // return e

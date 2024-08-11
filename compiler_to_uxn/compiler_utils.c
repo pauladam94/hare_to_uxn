@@ -1,7 +1,7 @@
 #include "compiler_utils.h"
 
 // clang-format off
-void fprintf_uxn_instruction(FILE *file, UxnInstruction *inst) {
+void fprintf_uxn_instruction(FILE *file, Instruction *inst) {
 	switch (*inst) {
 	case BRK: fprintf(file, "BRK"); break;
 	case LIT2: fprintf(file, "LIT2"); break;
@@ -261,25 +261,24 @@ void fprintf_uxn_instruction(FILE *file, UxnInstruction *inst) {
 	case SFT2kr: fprintf(file, "SFT2kr"); break;
 	}
 }
-// clang-format off
+// clang-format on
 
-
-void fprintf_uxn_program(FILE *file, UxnProgram *uxn_program) {
+void fprintf_uxn_program(FILE *file, Program *uxn_program) {
 	for (int i = 0; i < 0x10000; i++) {
 		if (i == 0x100) {
-			fprintf(file, "|0100 ");
+			fprintf(file, "|0100");
 		}
 		if (!uxn_program->is_written[i]) {
 			continue;
 		}
+		if (uxn_program->comments[i] != NULL) {
+			fprintf(file, "\n( %s )", uxn_program->comments[i]);
+		}
+		fprintf(file, " ");
 		if (uxn_program->is_instruction[i]) {
 			fprintf_uxn_instruction(file, &uxn_program->memory[i]);
 		} else {
 			fprintf(file, "%02x", (uint8_t)uxn_program->memory[i]);
-		}
-		fprintf(file, " ");
-		if (uxn_program->comments[i] != NULL) {
-			fprintf(file, "( %s )\n", uxn_program->comments[i]);
 		}
 	}
 }

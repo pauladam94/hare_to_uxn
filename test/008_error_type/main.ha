@@ -1,3 +1,3 @@
-fn main()void={
+fn main() void={
     return 42;
 };

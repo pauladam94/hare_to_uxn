@@ -3,6 +3,7 @@
 #include "utils/files.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 int main(int argc, char **argv) {
 	/// There are 4 part of tests :
@@ -21,10 +22,13 @@ int main(int argc, char **argv) {
 		reset();
 		return -1;
 	}
+	if (strcmp("test/README.md", argv[1]) == 0) {
+		return 0;
+	}
 
 	char *path_dir = argv[1];
 	blue();
-	printf("[Test: %s]", path_dir);
+	printf("[%-20.20s]", path_dir + 5);
 	reset();
 	fflush(stdout);
 
@@ -218,10 +222,6 @@ int main(int argc, char **argv) {
 	printf("[OK parser]");
 	reset();
 	fflush(stdout);
-
-	// TODO remove // just to test parse memory leak
-	// ast_delete(ast);
-	// printf("\n");
 	// return 0;
 
 	///// ----- COMPILER TEST ----- /////
@@ -229,12 +229,12 @@ int main(int argc, char **argv) {
 	sprintf(path_result, "%s/code.uxntal", path_dir);
 
 	error = fopen(path_error, "w");
-	UxnProgram *uxn_program = compile_to_uxn(error, ast);
+	Program *uxn_program = compile_to_uxn(error, ast);
 	fclose(error);
 
 	if (uxn_program == NULL) {
 		red();
-		printf("[Error during compiling]\n");
+		printf("[Error compiler]\n");
 		reset();
 		return 0;
 	}

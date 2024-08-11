@@ -38,7 +38,7 @@ Token token_only_type(Stream *stream, TokenType token_type) {
 	return token;
 }
 
-Token token_append_char(Token token, char c) {
+Token token_append(Token token, char c) {
 	uint8_t token_length = strlen(token.text);
 
 	// store previous token text
@@ -184,7 +184,7 @@ Tokens *tokens_empty(void) {
 	return result;
 }
 
-void tokens_adapt_array(Tokens *tokens) {
+void tokens_resize(Tokens *tokens) {
 	if (tokens->capacity < tokens->length) {
 		if (tokens->capacity == 0) {
 			tokens->capacity = 1;
@@ -205,9 +205,9 @@ void tokens_adapt_array(Tokens *tokens) {
 }
 
 // Add one token to the struct tokens
-void tokens_append_token(Tokens *tokens, Token token) {
+void tokens_append(Tokens *tokens, Token token) {
 	tokens->length++;
-	tokens_adapt_array(tokens);
+	tokens_resize(tokens);
 	tokens->tokens[tokens->length - 1] = token;
 }
 
@@ -304,7 +304,7 @@ Token next_string_literal(Stream *stream, char *c) {
 			printf("error missing end of string literal");
 		}
 		if (*c != '\"') {
-			token = token_append_char(token, *c);
+			token = token_append(token, *c);
 			continue;
 		}
 		*c = next_char(stream);
@@ -332,7 +332,7 @@ Token next_number(Stream *stream, char *c) {
 	while (true) {
 		*c = next_char(stream);
 		if (isdigit(*c)) {
-			token = token_append_char(token, *c);
+			token = token_append(token, *c);
 			continue;
 		}
 		return token;
@@ -345,7 +345,7 @@ Token next_ident(Stream *stream, char *c) {
 	while (true) {
 		*c = next_char(stream);
 		if (isalpha(*c) || isdigit(*c) || *c == '_') {
-			token = token_append_char(token, *c);
+			token = token_append(token, *c);
 			continue;
 		}
 		if (strcmp("fn", token.text) == 0) {
@@ -477,7 +477,7 @@ Tokens *lexify(FILE *error, FILE *file) {
 			empty_token = false;
 			continue;
 		}
-		tokens_append_token(tokens, token);
+		tokens_append(tokens, token);
 	}
 	return tokens;
 }

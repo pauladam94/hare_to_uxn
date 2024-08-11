@@ -4,23 +4,73 @@
 #include <stdlib.h>
 #include <string.h>
 
+///// ----- Variable Layout ----- /////
 typedef struct {
+	bool defined;
+	uint8_t size;
+	uint8_t addr;
+} VariableInfo;
+
+typedef struct {
+	uint8_t capacity;
 	uint8_t length;
 	ProgramType *types;
-	char *names;
-} VariableTypes;
+	char **names;
+} VariableLayout;
 
-typedef struct {
-	uint16_t size_program;
-	VariableTypes var_types;
-} FunctionLayout;
+void var_layout_resize(VariableLayout *vars) {
+	if (vars->capacity < vars->length) {
+		if (vars->capacity == 0) {
+			vars->capacity = 1;
+		} else {
+			vars->capacity *= 2;
+		}
+		char **prev_names = vars->names;
+		ProgramType *prev_types = vars->types;
+		vars->names = malloc(sizeof(*vars->names) * vars->capacity);
+		vars->types = malloc(sizeof(*vars->types) * vars->capacity);
+		for (int i = 0; i < vars->length - 1; i++) {
+			vars->names[i] = prev_names[i];
+			vars->types[i] = prev_types[i];
+		}
+		if (prev_names != NULL) {
+			free(prev_names);
+			free(prev_types);
+		}
+	}
+}
 
-typedef struct {
-	uint8_t length;
-	FunctionLayout *functions;
-} ProgramLayout;
+void var_layout_append(VariableLayout *vars, ProgramType type, char *name) {
+	vars->length++;
+	var_layout_resize(vars);
+	vars->names[vars->length - 1] = name;
+	vars->types[vars->length - 1] = type;
+}
 
-///// ----- Partial Uxn Program ----- /////
+// This gets the position of the last inserted variable with the name `name`
+VariableInfo var_layout_get_addr(VariableLayout *vars, char *name) {
+	uint8_t addr = 0;
+	for (int i = 0; i < vars->length; i++) {
+		VariableInfo var_info;
+		if (vars->types[i] == U8_T) {
+			var_info.size = 8;
+		} else if (vars->types[i] == U16_T) {
+			var_info.size = 16;
+		}
+		// The parser avoided to have variable with `void` type
+		if (strcmp(name, vars->names[i]) == 0) {
+			var_info.defined = true;
+			var_info.addr = addr;
+			return var_info;
+		}
+		addr += var_info.size;
+	}
+	VariableInfo info;
+	info.defined = false;
+	return info;
+}
+
+///// ----- PARTIAL PROGRAM ----- /////
 
 /// The partial Uxn Program is used when compiling the AST piece by piece.
 /// At the end of the traversal of the AST, we should assemble all those partial
@@ -30,12 +80,11 @@ typedef struct {
 	uint16_t length;
 	char **comments;
 	bool *is_instruction;
-	UxnInstruction *instructions;
-} UxnPartialProgram;
+	Instruction *instructions;
+} PartProgram;
 
-///// ----- PARTIAL PROGRAM ----- /////
-UxnPartialProgram *empty_partial_program(void) {
-	UxnPartialProgram *program = malloc(sizeof(*program));
+PartProgram *part_program_empty(void) {
+	PartProgram *program = malloc(sizeof(*program));
 	program->capacity = 0;
 	program->length = 0;
 	program->comments = NULL;
@@ -44,27 +93,31 @@ UxnPartialProgram *empty_partial_program(void) {
 	return program;
 }
 
+void uxn_part_program_free(PartProgram part_program) {
+	free(part_program.comments);
+	free(part_program.is_instruction);
+	free(part_program.instructions);
+}
+
 /// Delete of a partial program
-/// This does not delete comments strings because
-void uxn_partial_program_delete(UxnPartialProgram *partial_program) {
-	free(partial_program->comments);
-	free(partial_program->is_instruction);
-	free(partial_program->instructions);
-	free(partial_program);
+/// This does not delete comments strings because they are string literal
+/// This suppose that partial_program is allocated on the heap
+void uxn_part_program_delete(PartProgram *part_program) {
+	uxn_part_program_free(*part_program);
+	free(part_program);
 }
 
 // Returns a partial uxn program that is a combination of p1 and p2
 // Free p1 and p2 in the process
-UxnPartialProgram *concat_program(UxnPartialProgram *p1,
-				  UxnPartialProgram *p2) {
-	UxnPartialProgram *res = malloc(sizeof(*res));
+PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
+	PartProgram *res = malloc(sizeof(*res));
 
 	res->length = p1->length + p2->length;
 	res->capacity = res->length;
 
 	res->comments = malloc(sizeof(char *) * res->capacity);
 	res->is_instruction = malloc(sizeof(bool) * res->capacity);
-	res->instructions = malloc(sizeof(UxnInstruction) * res->capacity);
+	res->instructions = malloc(sizeof(Instruction) * res->capacity);
 
 	int i = 0;
 	for (int j = 0; j < p1->length; j++) {
@@ -80,16 +133,12 @@ UxnPartialProgram *concat_program(UxnPartialProgram *p1,
 		i++;
 	}
 
-	uxn_partial_program_delete(p1);
-	uxn_partial_program_delete(p2);
+	uxn_part_program_delete(p1);
+	uxn_part_program_delete(p2);
 	return res;
 }
 
-// add to the program 'p' (in place) one instruction which has
-// instruction, is_intruction, comment to describe it
-void append_instruction(UxnPartialProgram *p, char *comment,
-			bool is_instruction, UxnInstruction instruction) {
-	p->length++;
+void part_program_resize(PartProgram *p) {
 	if (p->capacity < p->length) {
 		if (p->capacity == 0) {
 			p->capacity = 2;
@@ -98,44 +147,76 @@ void append_instruction(UxnPartialProgram *p, char *comment,
 		}
 		char **prev_comments = p->comments;
 		bool *prev_is_instruction = p->is_instruction;
-		UxnInstruction *prev_instructions = p->instructions;
+		Instruction *prev_instructions = p->instructions;
 
 		p->comments = malloc(sizeof(char *) * p->capacity);
 		p->is_instruction = malloc(sizeof(bool) * p->capacity);
-		p->instructions = malloc(sizeof(UxnInstruction) * p->capacity);
+		p->instructions = malloc(sizeof(Instruction) * p->capacity);
 
 		for (int i = 0; i < p->length - 1; i++) {
 			p->comments[i] = prev_comments[i];
 			p->is_instruction[i] = prev_is_instruction[i];
 			p->instructions[i] = prev_instructions[i];
 		}
-		free(prev_comments);
-		free(prev_is_instruction);
-		free(prev_instructions);
+		if (prev_comments != NULL) {
+			free(prev_comments);
+			free(prev_is_instruction);
+			free(prev_instructions);
+		}
 	}
+}
+
+// add to the program 'p' (in place) one instruction which has
+// instruction, is_intruction, comment to describe it
+void append_number(PartProgram *p, char *comment, uint16_t n) {
+	if (n < 0x1000) {
+		p->length++;
+		part_program_resize(p);
+
+		p->comments[p->length - 1] = comment;
+		p->is_instruction[p->length - 1] = false;
+
+		p->instructions[p->length - 1] = n;
+	} else {
+		p->length += 2;
+		part_program_resize(p);
+		p->comments[p->length - 2] = comment;
+		p->is_instruction[p->length - 2] = false;
+		p->is_instruction[p->length - 1] = false;
+
+		p->instructions[p->length - 2] = n;
+		p->instructions[p->length - 1] = n;
+	}
+}
+
+// add to the program 'p' (in place) one instruction which has
+// instruction, is_intruction, comment to describe it
+void append_instruction(PartProgram *p, char *comment, Instruction inst) {
+	p->length++;
+	part_program_resize(p);
 
 	p->comments[p->length - 1] = comment;
-	p->is_instruction[p->length - 1] = is_instruction;
-	p->instructions[p->length - 1] = instruction;
+	p->is_instruction[p->length - 1] = true;
+	p->instructions[p->length - 1] = inst;
 }
 
 /// Write a partial function to an UxnProgram a a certain 'pos'
 /// This functions delete PartialUxnProgram
-void write_partial_program(FILE *error, UxnPartialProgram *partial_program,
-			   UxnProgram *p, uint16_t pos) {
-	for (uint16_t i = 0; i < partial_program->length; i++) {
-		p->comments[pos + i] = partial_program->comments[i];
+void write_part_program(FILE *error, PartProgram part_program, Program *p,
+			uint16_t pos) {
+	for (uint16_t i = 0; i < part_program.length; i++) {
+		p->comments[pos + i] = part_program.comments[i];
 		p->is_written[pos + i] = true;
-		p->is_instruction[pos + i] = partial_program->is_instruction[i];
-		p->memory[pos + i] = partial_program->instructions[i];
+		p->is_instruction[pos + i] = part_program.is_instruction[i];
+		p->memory[pos + i] = part_program.instructions[i];
 	}
-	uxn_partial_program_delete(partial_program);
+	uxn_part_program_free(part_program);
 }
 
 ///// ----- Uxn Program ----- /////
 
 /// Completely free the program that is totally heap allocated
-void uxn_program_delete(UxnProgram *program) {
+void uxn_program_delete(Program *program) {
 	for (int i = 0; i < 0x10000; i++) {
 		if (program->is_written[i]) {
 			// if (program->comments[i] != NULL) {
@@ -147,57 +228,67 @@ void uxn_program_delete(UxnProgram *program) {
 	return;
 }
 
-///// ----- Program Layout ----- /////
-
-// uint8_t get_number_of_variable FunctionLayout
-FunctionLayout compute_function_layout(Function *function);
-ProgramLayout compute_program_layout(Ast *ast);
-
 ///// ----- COMPILE ----- /////
-UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
+PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 	switch (expr->tag) {
 	case LET_E: {
-		fprintf(error, "let todo\n");
-		break;
+		// Compile the expression
+		PartProgram *let = compile_expr(error, expr->let.e, vars);
+		if (let == NULL) {
+			fprintf(error, "Error compiling expr\n");
+			return NULL;
+		}
+
+		// Add the variable to the variable list
+		var_layout_append(vars, expr->let.type, expr->let.var);
+		// Get the address of this new variable
+		VariableInfo var_info =
+		    var_layout_get_addr(vars, expr->let.var);
+
+		// Right now we assume that the value is of size 8 bits
+		append_instruction(let, "let definition", LIT);
+		append_number(let, NULL, var_info.addr);
+		append_instruction(let, NULL, STZ);
+		return let;
 	}
 	case ADD_E: {
-		UxnPartialProgram *lhs = compile_expr(error, expr->add.lhs);
+		PartProgram *lhs = compile_expr(error, expr->add.lhs, vars);
 		if (lhs == NULL) {
 			break;
 		}
-		UxnPartialProgram *rhs = compile_expr(error, expr->add.rhs);
+		PartProgram *rhs = compile_expr(error, expr->add.rhs, vars);
 		if (rhs == NULL) {
-			uxn_partial_program_delete(lhs);
+			uxn_part_program_delete(lhs);
 			break;
 		}
-		UxnPartialProgram *add = empty_partial_program();
-		append_instruction(add, "Add expression", true, ADD);
+		PartProgram *add = part_program_empty();
+		append_instruction(add, "Add expression", ADD);
 		return concat_program(concat_program(lhs, rhs), add);
 	}
 	case SUB_E: {
-		UxnPartialProgram *lhs = compile_expr(error, expr->add.lhs);
+		PartProgram *lhs = compile_expr(error, expr->add.lhs, vars);
 		if (lhs == NULL) {
 			break;
 		}
-		UxnPartialProgram *rhs = compile_expr(error, expr->add.rhs);
+		PartProgram *rhs = compile_expr(error, expr->add.rhs, vars);
 		if (rhs == NULL) {
-			uxn_partial_program_delete(lhs);
+			uxn_part_program_delete(lhs);
 			break;
 		}
-		UxnPartialProgram *add = empty_partial_program();
-		append_instruction(add, "Sub expression", true, ADD);
+		PartProgram *add = part_program_empty();
+		append_instruction(add, "Sub expression", ADD);
 		return concat_program(concat_program(lhs, rhs), add);
 	}
 	case SEQUENCE_E: {
-		UxnPartialProgram *sequence = empty_partial_program();
+		PartProgram *sequence = part_program_empty();
 		for (int i = 0; i < expr->sequence.length; i++) {
-			UxnPartialProgram *e =
-			    compile_expr(error, &expr->sequence.list[i]);
+			PartProgram *e =
+			    compile_expr(error, &expr->sequence.list[i], vars);
 			if (e == NULL) {
 				fprintf(
 				    error,
 				    "Error compiling expression sequence\n");
-				uxn_partial_program_delete(sequence);
+				uxn_part_program_delete(sequence);
 				return NULL;
 			}
 			sequence = concat_program(sequence, e);
@@ -209,41 +300,52 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		break;
 	}
 	case DEREF_ASSIGN_E: { // *e1 = e2
-		UxnPartialProgram *e1 =
-		    compile_expr(error, expr->deref_assign.e1);
+		PartProgram *e1 =
+		    compile_expr(error, expr->deref_assign.e1, vars);
 		if (e1 == NULL) {
 			break;
 		}
-		UxnPartialProgram *e2 =
-		    compile_expr(error, expr->deref_assign.e2);
-		if (e1 == NULL) {
+		PartProgram *e2 =
+		    compile_expr(error, expr->deref_assign.e2, vars);
+		if (e2 == NULL) {
 			break;
 		}
-		append_instruction(e1, "Deref Assign", true, DEO);
+		append_instruction(e1, "Deref Assign", DEO);
 		return concat_program(e2, e1);
 	}
 	case DEREF_E: { // *e
-		UxnPartialProgram *e = compile_expr(error, expr->deref.e);
+		PartProgram *e = compile_expr(error, expr->deref.e, vars);
 		if (e == NULL) {
 			break;
 		}
-		append_instruction(e, "deref", true, DEO);
+		append_instruction(e, "deref", DEO);
 		// append_intruction();
 		return e;
 	}
 	case VARIABLE_E: {
-		// have to know where variables are located
-		fprintf(error, "variable todo\n");
-		break;
+		char *name = expr->variable.name;
+		PartProgram *var = part_program_empty();
+
+		// Get the variable address
+		VariableInfo var_info = var_layout_get_addr(vars, name);
+		if (!var_info.defined) {
+			fprintf(error, "var '%s' not defined", name);
+			return NULL;
+		}
+		// Put the address on the stack
+		append_instruction(var, NULL, LIT);
+		append_number(var, NULL, var_info.addr);
+		append_instruction(var, "Var", LDZ);
+		return var;
 	}
 	case NUMBER_E: {
-		UxnPartialProgram *number = empty_partial_program();
-		if (expr->number.value < 255) {
-			append_instruction(number, NULL, true, LIT);
+		PartProgram *number = part_program_empty();
+		if (expr->number.value < 0x1000) {
+			append_instruction(number, NULL, LIT);
 		} else {
-			append_instruction(number, NULL, true, LIT2);
+			append_instruction(number, NULL, LIT2);
 		}
-		append_instruction(number, NULL, false, expr->number.value);
+		append_number(number, NULL, expr->number.value);
 		return number;
 	}
 	case RETURN_E: {
@@ -255,9 +357,9 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 		break;
 	}
 	case CHAR_LITERAL_E: {
-		UxnPartialProgram *number = empty_partial_program();
-		append_instruction(number, NULL, true, LIT);
-		append_instruction(number, "char literal", false,
+		PartProgram *number = part_program_empty();
+		append_instruction(number, NULL, LIT);
+		append_instruction(number, "char literal",
 				   expr->char_literal.c);
 		return number;
 	}
@@ -270,68 +372,98 @@ UxnPartialProgram *compile_expr(FILE *error, Expression *expr) {
 	return NULL;
 }
 
-UxnPartialProgram *compile_function(FILE *error, Function *function,
-				    bool layout) {
-	// TODO handle arguments
-	fprintf(error, "handle arguments and other");
-	return compile_expr(error, function->expr, layout);
+PartProgram compile_function(FILE *error, Function *function) {
+
+	VariableLayout vars;
+	vars.names = NULL;
+	vars.types = NULL;
+	vars.length = 0;
+	vars.capacity = 0;
+
+	PartProgram result;
+	PartProgram *expr = compile_expr(error, function->expr, &vars);
+	if (expr == NULL) {
+		result.length = 0;
+		return result;
+	} else {
+		result = *expr;
+		free(expr);
+		return result;
+	}
 }
 
-UxnProgram *compile_to_uxn(FILE *error, Ast *ast) {
+Program *compile_to_uxn(FILE *error, Ast *ast) {
+	// No functions => stop
+	if (ast->length == 0) {
+		ast_delete(ast);
+		return NULL;
+	}
+
+	// two functions with the same name => stop
+	// TODO or not ?
+
+	// Get the 'main' if there is one else stop the compilation
+	bool found_main = false;
+	int index_main = 0;
+	for (int i = 0; i < ast->length; i++) {
+		if (strcmp(ast->functions[i].name, "main") == 0) {
+			found_main = true;
+			index_main = i;
+			break;
+		}
+	}
+	if (!found_main) {
+		fprintf(error, "No main function in the file");
+		ast_delete(ast);
+		return NULL;
+	}
+
+	PartProgram *func_binary = malloc(sizeof(*func_binary) * ast->length);
+	uint16_t *func_pos = malloc(sizeof(*func_pos) * ast->length);
+	func_pos[index_main] = 0x100;
+
+	// 1. Compile the different function
+	for (int i = 0; i < ast->length; i++) {
+		PartProgram func = compile_function(error, &ast->functions[i]);
+		if (func.length == 0) {
+			fprintf(error, "Error compiling function '%s'",
+				ast->functions[i].name);
+			ast_delete(ast);
+			return NULL;
+		}
+		func_binary[i] = func;
+	}
+
+	// 2. Compute the positions of every functions
+	uint16_t pos = 0x100;
+	pos += func_binary[index_main].length;
+	for (int i = 0; i < ast->length; i++) {
+		if (i == index_main) {
+			break;
+		}
+		pos += func_binary[i].length;
+		func_pos[i] = pos;
+	}
+
+	// 3. Complete Address of functions in the partials programs
+	// BIG TODO
+	if (func_binary == NULL) {
+		ast_delete(ast);
+		return NULL;
+	}
+
+	// 4. Write all functions in the complete program
 	// Initialize Program
-	UxnProgram *program = malloc(sizeof(*program));
+	Program *program = malloc(sizeof(*program));
 	for (int i = 0; i < 0x10000; i++) {
 		program->is_written[i] = false;
 		program->comments[i] = NULL;
 		program->is_instruction[i] = false; // not useful
 		program->memory[i] = BRK;	    // not useful
 	}
-
-	// Get the 'main' if there is one
-	// If there is none return an error
-	Function *main = NULL;
 	for (int i = 0; i < ast->length; i++) {
-		Function *f = &ast->functions[i];
-		if (strcmp(f->name, "main") == 0) {
-			main = f;
-			break;
-		}
+		write_part_program(error, func_binary[i], program, func_pos[i]);
 	}
-	if (main == NULL) {
-		fprintf(error, "No main function in the file");
-		program->memory[0x100] = BRK;
-		program->is_written[0x100] = true;
-		program->is_instruction[0x100] = true;
-
-		// Force to do that
-		// because 'asm' can't compile code with only zeros
-		program->memory[0x101] = 42;
-		program->is_written[0x101] = true;
-		program->is_instruction[0x101] = false;
-		ast_delete(ast);
-		return program;
-	}
-
-
-
-	// 1. Get the size of all functions
-	ProgramLayout layout = compute_program_layout(ast);
-	// 2. Decide where to place them (one on top of each other)
-
-	// 3. Compile the different function
-	UxnPartialProgram *partial_program =
-	    compile_function(error, main, false);
-
-	if (partial_program == NULL) {
-		ast_delete(ast);
-		free(program);
-		return NULL;
-	}
-
-	// 4. concatenate all the different function compiled
-
-	// 5. Write in a complete uxn program
-	write_partial_program(error, partial_program, program, 0x100);
 
 	ast_delete(ast);
 	return program;
