@@ -11,24 +11,29 @@ build: bin/test_all
 # TEST
 test: clean_results bin/test_all $(wildcard test/*/*_expected)
 	@start_time=$$(date +%s); \
+	number_test=0; \
 	for dir in $(wildcard test/*); do \
 		./bin/test_all $$dir 2>&1 ; \
+		number_test=$$((number_test + 1)); \
 	done; \
 	end_time=$$(date +%s); \
 	elapsed_time=$$((end_time - start_time)); \
-	echo "Time doing test: $$elapsed_time s"
+	echo "$$number_test test took $$elapsed_time s"
 
 # add bin/uxncli or not
-bin/test_all: test.c bin/ bin/lexer.o bin/parser.o bin/compiler.o bin/compiler_utils.o bin/colors.o bin/files.o
-	@$(CC) $(CFLAGS) test.c bin/lexer.o bin/parser.o bin/compiler.o bin/compiler_utils.o bin/colors.o bin/files.o -o bin/test_all
+bin/test_all: test.c bin/ bin/lexer.o bin/parser.o bin/parser_utils.o bin/compiler.o bin/compiler_utils.o bin/colors.o bin/files.o
+	@$(CC) $(CFLAGS) test.c bin/lexer.o bin/parser.o bin/parser_utils.o bin/compiler.o bin/compiler_utils.o bin/colors.o bin/files.o -o bin/test_all
 
 # LEXER
 bin/lexer.o: lexer/lexer.c lexer/lexer.h
 	@$(CC) $(CFLAGS) -c lexer/lexer.c -o bin/lexer.o
 
 # PARSER
-bin/parser.o: bin/lexer.o parser/parser.c parser/parser.h
+bin/parser.o: bin/lexer.o bin/parser_utils.o parser/parser.c parser/parser.h
 	@$(CC) $(CFLAGS) -c parser/parser.c -o bin/parser.o
+
+bin/parser_utils.o: parser/parser_utils.c parser/parser_utils.h
+	@$(CC) $(CFLAGS) -c parser/parser_utils.c -o bin/parser_utils.o
 
 # COMPILER
 bin/compiler.o: bin/lexer.o bin/parser.o bin/compiler_utils.o compiler_to_uxn/compiler.c compiler_to_uxn/compiler.h

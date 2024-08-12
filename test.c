@@ -55,7 +55,7 @@ int main(int argc, char **argv) {
 	file_code = fopen(path_code, "r");
 	if (file_code == NULL) {
 		red();
-		printf("[Error during lexing : Cannot open '%s']\n", path_code);
+		printf("[Error opening '%s']\n", path_code + 5);
 		reset();
 		return 0;
 	};
@@ -75,7 +75,7 @@ int main(int argc, char **argv) {
 	file_result = fopen(path_result, "w");
 	if (file_result == NULL) {
 		red();
-		printf("[Error opening '%s']\n", path_result);
+		printf("[Error opening '%s']\n", path_result + 5);
 		reset();
 		// TODO tokens_free_complete(tokens); because else memory leaks
 		return 0;
@@ -88,14 +88,14 @@ int main(int argc, char **argv) {
 	file_result = fopen(path_result, "r");
 	if (file_expected == NULL) {
 		red();
-		printf("[Error opening '%s']\n", path_expected);
+		printf("[Error opening '%s']\n", path_expected + 5);
 		reset();
 		// TODO free tokens
 		return 0;
 	}
 	if (file_result == NULL) {
 		red();
-		printf("[Error opening '%s']\n", path_result);
+		printf("[Error opening '%s']\n", path_result + 5);
 		reset();
 		// TODO free tokens
 		return 0;
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
 
 	if (ast == NULL) {
 		red();
-		printf("[Error parsing %s]\n", path_code);
+		printf("[Error parsing %s]\n", path_code + 5);
 		reset();
 		return 0;
 	}
@@ -146,7 +146,7 @@ int main(int argc, char **argv) {
 	Tokens *tokens_2 = lexify(error, file_code);
 	if (tokens_2 == NULL) {
 		red();
-		printf("[Error lexing %s]\n", path_result);
+		printf("[Error lexing %s]\n", path_result + 5);
 		reset();
 		return 0;
 	}
@@ -176,8 +176,7 @@ int main(int argc, char **argv) {
 	file_2_result = fopen(path_2_result, "r");
 	if (!files_equal(file_result, file_2_result)) {
 		red();
-		printf("[Error: parsing again does not give the same output "
-		       "as the first parse]\n");
+		printf("[Parsing again not the same output as first parse]\n");
 		reset();
 		return 0;
 	}
@@ -210,8 +209,7 @@ int main(int argc, char **argv) {
 	file_expected = fopen(path_expected, "r");
 	if (!files_equal(file_result, file_expected)) {
 		red();
-		printf("[Error: Lexing again the parsing output not the same "
-		       "as the first lexing]\n");
+		printf("[Lexing the 2nd parsing not same as first lexing]\n");
 		reset();
 		return 0;
 	}
@@ -271,7 +269,7 @@ int main(int argc, char **argv) {
 	file_result = fopen(path_result, "r");
 	if (file_result == NULL) {
 		red();
-		printf("[Error: opening %s]\n", path_result);
+		printf("[Error: opening %s]\n", path_result + 5);
 		reset();
 		return 0;
 	}

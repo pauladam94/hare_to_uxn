@@ -1,0 +1,12 @@
+fn main() void = {
+    let a : u8 = 4;
+    let b : u8 = 2;
+    let c : u8 = 7;
+    let d : u8 = 6;
+    let out: u8 = 0x18;
+    *out = 48 + a;
+    *out = 48 + b;
+    *out = 48 + c;
+    *out = 48 + d;
+    *out = '\n';
+};

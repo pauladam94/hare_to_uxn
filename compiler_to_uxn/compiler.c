@@ -53,9 +53,9 @@ VariableInfo var_layout_get_addr(VariableLayout *vars, char *name) {
 	for (int i = 0; i < vars->length; i++) {
 		VariableInfo var_info;
 		if (vars->types[i] == U8_T) {
-			var_info.size = 8;
+			var_info.size = 1;
 		} else if (vars->types[i] == U16_T) {
-			var_info.size = 16;
+			var_info.size = 2;
 		}
 		// The parser avoided to have variable with `void` type
 		if (strcmp(name, vars->names[i]) == 0) {
@@ -246,37 +246,27 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		    var_layout_get_addr(vars, expr->let.var);
 
 		// Right now we assume that the value is of size 8 bits
-		append_instruction(let, "let definition", LIT);
+		append_instruction(let, NULL, LIT);
 		append_number(let, NULL, var_info.addr);
-		append_instruction(let, NULL, STZ);
+		append_instruction(let, "let def", STZ);
 		return let;
 	}
-	case ADD_E: {
-		PartProgram *lhs = compile_expr(error, expr->add.lhs, vars);
+	case ADD_E:
+	case SUB_E:
+	case MULT_E:
+	case DIV_E: {
+		PartProgram *lhs = compile_expr(error, expr->binary.lhs, vars);
 		if (lhs == NULL) {
 			break;
 		}
-		PartProgram *rhs = compile_expr(error, expr->add.rhs, vars);
+		PartProgram *rhs = compile_expr(error, expr->binary.rhs, vars);
 		if (rhs == NULL) {
 			uxn_part_program_delete(lhs);
 			break;
 		}
 		PartProgram *add = part_program_empty();
-		append_instruction(add, "Add expression", ADD);
-		return concat_program(concat_program(lhs, rhs), add);
-	}
-	case SUB_E: {
-		PartProgram *lhs = compile_expr(error, expr->add.lhs, vars);
-		if (lhs == NULL) {
-			break;
-		}
-		PartProgram *rhs = compile_expr(error, expr->add.rhs, vars);
-		if (rhs == NULL) {
-			uxn_part_program_delete(lhs);
-			break;
-		}
-		PartProgram *add = part_program_empty();
-		append_instruction(add, "Sub expression", ADD);
+		append_instruction(add, "Add expression",
+				   binary_tag_to_instruction(expr->tag));
 		return concat_program(concat_program(lhs, rhs), add);
 	}
 	case SEQUENCE_E: {
@@ -285,9 +275,9 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 			PartProgram *e =
 			    compile_expr(error, &expr->sequence.list[i], vars);
 			if (e == NULL) {
-				fprintf(
-				    error,
-				    "Error compiling expression sequence\n");
+				fprintf(error, "Error compiling sequence\n");
+				fprintf_expression(error,
+						   &expr->sequence.list[i]);
 				uxn_part_program_delete(sequence);
 				return NULL;
 			}
@@ -296,8 +286,24 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		return sequence;
 	}
 	case ASSIGN_E: {
-		fprintf(error, "assign todo\n");
-		break;
+		char *name = expr->assign.var;
+
+		// Compile the expression
+		PartProgram *assign = compile_expr(error, expr->assign.e, vars);
+		if (assign == NULL) {
+			fprintf(error, "Error compiling expr\n");
+			return NULL;
+		}
+
+		// Get the address of this new variable
+		VariableInfo var_info =
+		    var_layout_get_addr(vars, expr->assign.var);
+
+		// Right now we assume that the value is of size 8 bits
+		append_instruction(assign, NULL, LIT);
+		append_number(assign, NULL, var_info.addr);
+		append_instruction(assign, "assign def", STZ);
+		return assign;
 	}
 	case DEREF_ASSIGN_E: { // *e1 = e2
 		PartProgram *e1 =
@@ -359,8 +365,7 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 	case CHAR_LITERAL_E: {
 		PartProgram *number = part_program_empty();
 		append_instruction(number, NULL, LIT);
-		append_instruction(number, "char literal",
-				   expr->char_literal.c);
+		append_number(number, "char literal", expr->char_literal.c);
 		return number;
 	}
 	case STRING_LITERAL_E: {
@@ -368,7 +373,6 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		break;
 	}
 	}
-	fprintf(error, "Error compiling expression\n");
 	return NULL;
 }
 

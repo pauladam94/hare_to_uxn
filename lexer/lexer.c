@@ -8,20 +8,23 @@
 #include <string.h>
 
 typedef struct {
+	FILE *error;
 	FILE *file;
 	int size_buff;
 	int pos;
 	char buff[100];
 	uint16_t line;
 	uint16_t column;
-} Stream;
+	bool failed;
+	bool empty_token;
+} LexerState;
 
 ///// ----- TOKEN ----- /////
 
-Token token_one_char(Stream *stream, TokenType token_type, char c) {
+Token token_one_char(LexerState *state, TokenType token_type, char c) {
 	Token token;
-	token.line = stream->line;
-	token.column = stream->column;
+	token.line = state->line;
+	token.column = state->column;
 	token.type = token_type;
 	token.text = (char *)malloc(2 * sizeof(char));
 	token.text[0] = c;
@@ -29,10 +32,10 @@ Token token_one_char(Stream *stream, TokenType token_type, char c) {
 	return token;
 }
 
-Token token_only_type(Stream *stream, TokenType token_type) {
+Token token_only_type(LexerState *state, TokenType token_type) {
 	Token token;
-	token.line = stream->line;
-	token.column = stream->column;
+	token.line = state->line;
+	token.column = state->column;
 	token.type = token_type;
 	token.text = NULL;
 	return token;
@@ -247,79 +250,88 @@ void fprintf_tokens(FILE *file, Tokens *tokens) {
 
 ///// ---- LEXING NEXT FUNCTIONS ----- /////
 
-// return the next character of the stream file
+// return the next character of the state file
 // return '\0' if it is the end of the file
-char next_char(Stream *stream) {
+char next_char(LexerState *state) {
 	char c;
-	if (stream->buff[stream->pos] == '\0') {
-		if (fgets(stream->buff, stream->size_buff, stream->file) ==
-		    NULL) {
+	if (state->buff[state->pos] == '\0') {
+		if (fgets(state->buff, state->size_buff, state->file) == NULL) {
 			return '\0';
 		} else {
-			stream->pos = 1;
+			state->pos = 1;
 		}
 	} else {
-		stream->pos += 1;
+		state->pos += 1;
 	}
-	c = stream->buff[stream->pos - 1];
+	c = state->buff[state->pos - 1];
 	if (c == '\n') {
-		stream->line += 1;
-		stream->column = 0;
+		state->line += 1;
+		state->column = 0;
 	} else {
-		stream->column += 1;
+		state->column += 1;
 	}
 	return c;
 }
 
-Token next_char_literal(Stream *stream, char *c) {
+Token next_char_literal(LexerState *state, char *c) {
 	Token token;
-	*c = next_char(stream);
+	*c = next_char(state);
 	if (*c == '\'') {
-		printf("don't accept empty char_literal");
+		// fprintf("don't accept empty char_literal");
+		state->failed = true;
+		token.type = CHAR_LITERAL;
+		return token;
 	}
 	if (*c == '\\') {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (*c == 'n') {
-			token = token_one_char(stream, CHAR_LITERAL, '\n');
+			token = token_one_char(state, CHAR_LITERAL, '\n');
+		} else {
+			state->failed = true;
+			token.type = CHAR_LITERAL;
+			return token;
 		}
 	} else {
-		token = token_one_char(stream, CHAR_LITERAL, *c);
+		token = token_one_char(state, CHAR_LITERAL, *c);
 	}
-	*c = next_char(stream);
+	*c = next_char(state);
 	if (*c != '\'') {
 		printf("TODO make this a recoverable error\n");
 	}
 	return token;
 }
 
-Token next_string_literal(Stream *stream, char *c) {
-	*c = next_char(stream);
+Token next_string_literal(LexerState *state, char *c) {
+	*c = next_char(state);
 	if (*c == '\"') {
 		printf("don't accept empty string_literal");
 	}
-	Token token = token_one_char(stream, CHAR_LITERAL, *c);
+	Token token = token_one_char(state, STRING_LITERAL, *c);
 	while (true) {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (*c == '\0') {
-			printf("error missing end of string literal");
+			fprintf(state->error,
+				"error missing end of string literal");
+			state->failed = true;
+			return token;
 		}
 		if (*c != '\"') {
 			token = token_append(token, *c);
 			continue;
 		}
-		*c = next_char(stream);
+		*c = next_char(state);
 		break;
 	}
 	return token;
 }
 
 // Apply next_char until arriving on the end of the line
-void next_comment(Stream *stream, char *c) {
+void next_comment(LexerState *state, char *c) {
 	if (*c == '\n') {
 		return;
 	}
 	while (true) {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (*c != '\n') {
 			continue;
 		}
@@ -327,10 +339,10 @@ void next_comment(Stream *stream, char *c) {
 	}
 }
 
-Token next_number(Stream *stream, char *c) {
-	Token token = token_one_char(stream, NUMBER, *c);
+Token next_number(LexerState *state, char *c) {
+	Token token = token_one_char(state, NUMBER, *c);
 	while (true) {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (isdigit(*c)) {
 			token = token_append(token, *c);
 			continue;
@@ -340,115 +352,119 @@ Token next_number(Stream *stream, char *c) {
 	return token;
 }
 
-Token next_ident(Stream *stream, char *c) {
-	Token token = token_one_char(stream, IDENTIFIER, *c);
+Token next_ident(LexerState *state, char *c) {
+	Token token = token_one_char(state, IDENTIFIER, *c);
 	while (true) {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (isalpha(*c) || isdigit(*c) || *c == '_') {
 			token = token_append(token, *c);
 			continue;
 		}
 		if (strcmp("fn", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, FN);
+			return token_only_type(state, FN);
 		} else if (strcmp("let", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, LET);
+			return token_only_type(state, LET);
 		} else if (strcmp("return", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, RETURN);
+			return token_only_type(state, RETURN);
 		} else if (strcmp("void", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, VOID);
+			return token_only_type(state, VOID);
 		} else if (strcmp("u8", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, U8);
+			return token_only_type(state, U8);
 		} else if (strcmp("u16", token.text) == 0) {
 			free(token.text);
-			return token_only_type(stream, U16);
+			return token_only_type(state, U16);
 		}
 		return token;
 	}
 }
 
-// This function returns the next token of the stream and advance in the stream
-Token next_token(Stream *stream, char *c, bool *empty_token) {
+// This function returns the next token of the state and advance in the state
+Token next_token(LexerState *state, char *c) {
 	Token token;
+	token.type = VOID;
 	if (isspace(*c)) {
-		*c = next_char(stream);
-		*empty_token = true;
+		*c = next_char(state);
+		state->empty_token = true;
 		return token;
 	}
 	if (isdigit(*c)) {
-		return next_number(stream, c);
+		return next_number(state, c);
 	} else if (isalpha(*c) || *c == '_') {
-		return next_ident(stream, c);
+		return next_ident(state, c);
 	}
 	switch (*c) {
 	case '/': {
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (*c == '/') {
-			next_comment(stream, c);
-			*empty_token = true;
+			next_comment(state, c);
+			state->empty_token = true;
 			return token;
 		}
-		return token_only_type(stream, DIVIDE);
+		return token_only_type(state, DIVIDE);
 	}
 	case ':':
-		token = token_only_type(stream, COLON);
+		token = token_only_type(state, COLON);
 		break;
 	case ',':
-		token = token_only_type(stream, COMMA);
+		token = token_only_type(state, COMMA);
 		break;
 	case ';':
-		token = token_only_type(stream, SEMICOLON);
+		token = token_only_type(state, SEMICOLON);
 		break;
 	case '{':
-		token = token_only_type(stream, LBRACE);
+		token = token_only_type(state, LBRACE);
 		break;
 	case '}':
-		token = token_only_type(stream, RBRACE);
+		token = token_only_type(state, RBRACE);
 		break;
 	case '[':
-		token = token_only_type(stream, LBRACKET);
+		token = token_only_type(state, LBRACKET);
 		break;
 	case ']':
-		token = token_only_type(stream, RBRACKET);
+		token = token_only_type(state, RBRACKET);
 		break;
 	case '(':
-		token = token_only_type(stream, LPAREN);
+		token = token_only_type(state, LPAREN);
 		break;
 	case ')':
-		token = token_only_type(stream, RPAREN);
+		token = token_only_type(state, RPAREN);
 		break;
 	case '=':
-		*c = next_char(stream);
+		*c = next_char(state);
 		if (*c == '=') {
-			*c = next_char(stream);
-			return token_only_type(stream, EQUALEQUAL);
+			*c = next_char(state);
+			return token_only_type(state, EQUALEQUAL);
 		}
-		return token_only_type(stream, EQUAL);
+		return token_only_type(state, EQUAL);
 		break;
 	case '+':
-		token = token_only_type(stream, PLUS);
+		token = token_only_type(state, PLUS);
 		break;
 	case '-':
-		token = token_only_type(stream, MINUS);
+		token = token_only_type(state, MINUS);
 		break;
 	case '*':
-		token = token_only_type(stream, MULT);
+		token = token_only_type(state, MULT);
 		break;
 	case '\'':
-		token = next_char_literal(stream, c);
+		token = next_char_literal(state, c);
 		break;
 	case '\"':
-		token = next_string_literal(stream, c);
+		token = next_string_literal(state, c);
 		break;
 	default:
 		break;
 	}
 
-	*c = next_char(stream);
+	if (state->failed) {
+		return token;
+	}
+	*c = next_char(state);
 	return token;
 }
 
@@ -457,24 +473,30 @@ Token next_token(Stream *stream, char *c, bool *empty_token) {
 Tokens *lexify(FILE *error, FILE *file) {
 	Tokens *tokens = tokens_empty();
 
-	bool empty_token = false;
+	LexerState state;
+	state.error = error;
+	state.line = 1;
+	state.column = 0;
+	state.pos = 0;
+	state.file = file;
+	state.size_buff = 100;
+	state.buff[0] = '\0';
+	state.failed = false;
+	state.empty_token = false;
 
-	Stream stream;
-	stream.line = 1;
-	stream.column = 0;
-	stream.pos = 0;
-	stream.file = file;
-	stream.size_buff = 100;
-	stream.buff[0] = '\0';
-
-	char c = next_char(&stream);
+	char c = next_char(&state);
 	while (true) {
 		if (c == '\0') {
 			break;
 		}
-		Token token = next_token(&stream, &c, &empty_token);
-		if (empty_token) {
-			empty_token = false;
+		Token token = next_token(&state, &c);
+		// if (state.failed) {
+		// 	tokens_delete(tokens);
+		// 	return NULL;
+		// }
+
+		if (state.empty_token) {
+			state.empty_token = false;
 			continue;
 		}
 		tokens_append(tokens, token);

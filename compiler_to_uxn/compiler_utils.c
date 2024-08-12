@@ -1,5 +1,20 @@
 #include "compiler_utils.h"
 
+Instruction binary_tag_to_instruction(ExpressionType type) {
+	switch (type) {
+	case ADD_E:
+		return ADD;
+	case SUB_E:
+		return SUB;
+	case MULT_E:
+		return MUL;
+	case DIV_E:
+		return DIV;
+	default:
+		return BRK;
+	}
+}
+
 // clang-format off
 void fprintf_uxn_instruction(FILE *file, Instruction *inst) {
 	switch (*inst) {
@@ -271,14 +286,14 @@ void fprintf_uxn_program(FILE *file, Program *uxn_program) {
 		if (!uxn_program->is_written[i]) {
 			continue;
 		}
-		if (uxn_program->comments[i] != NULL) {
-			fprintf(file, "\n( %s )", uxn_program->comments[i]);
-		}
 		fprintf(file, " ");
 		if (uxn_program->is_instruction[i]) {
 			fprintf_uxn_instruction(file, &uxn_program->memory[i]);
 		} else {
 			fprintf(file, "%02x", (uint8_t)uxn_program->memory[i]);
+		}
+		if (uxn_program->comments[i] != NULL) {
+			fprintf(file, " ( %s )\n", uxn_program->comments[i]);
 		}
 	}
 }

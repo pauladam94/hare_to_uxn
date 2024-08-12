@@ -4,247 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-	FILE *error; // stream to output errors
-
-	Tokens *tokens; // list of tokens
-	uint32_t index; // where we are in the tokens
-
-	bool abort;  // have to stop the parsing
-	bool failed; // useful for functions that don't return a pointer
-} ParseState;	     // parse_state->worked
-
-Token current_token(ParseState *state) {
-	return state->tokens->tokens[state->index];
-}
-
-///// ----- EXPRESSION FUNCTIONS ----- /////
-
-/// Deletes completely recursively what expression points to
-/// It does not free the expression it self
-void expression_delete(Expression *expr, bool delete_itself) {
-	switch (expr->tag) {
-	case LET_E:
-		free(expr->let.var);
-		expression_delete(expr->let.e, true);
-		break;
-	case ADD_E:
-		expression_delete(expr->add.lhs, true);
-		expression_delete(expr->add.rhs, true);
-		break;
-	case SUB_E:
-		expression_delete(expr->sub.lhs, true);
-		expression_delete(expr->sub.rhs, true);
-		break;
-	case VARIABLE_E:
-		free(expr->variable.name);
-		break;
-	case NUMBER_E:
-		break;
-	case SEQUENCE_E:
-		for (int i = 0; i < expr->sequence.length; i++) {
-			expression_delete(&expr->sequence.list[i], false);
-		}
-		free(expr->sequence.list);
-		break;
-	case ASSIGN_E:
-		free(expr->assign.var);
-		expression_delete(expr->assign.e, true);
-		break;
-	case DEREF_ASSIGN_E:
-		expression_delete(expr->deref_assign.e1, true);
-		expression_delete(expr->deref_assign.e2, true);
-		break;
-	case DEREF_E:
-		expression_delete(expr->deref.e, true);
-		break;
-	case RETURN_E:
-		expression_delete(expr->ret.e, true);
-		break;
-	case FUNCTION_CALL_E:
-		free(expr->function_call.name);
-		break;
-	case CHAR_LITERAL_E:
-		break;
-	case STRING_LITERAL_E:
-		break;
-	}
-	if (delete_itself) {
-		free(expr);
-	}
-}
-
-///// ----- AST FUNCTIONS ----- /////
-
-// Free a complete AST structure
-void ast_delete(Ast *ast) {
-	for (int i = 0; i < ast->length; i++) {
-		free(ast->functions[i].name);
-		expression_delete(ast->functions[i].expr, true);
-		// free(ast->functions[i].expr);
-	}
-	free(ast->functions);
-	free(ast);
-}
-
-Ast *ast_new(void) {
-	Ast *ast = malloc(sizeof(*ast));
-	ast->length = 0;
-	ast->capacity = 0;
-	ast->functions = NULL;
-	return ast;
-}
-
-// function should not be NULL
-void ast_append(Ast *ast, Function function) {
-	ast->length += 1;
-	if (ast->length > ast->capacity) {
-		if (ast->capacity == 0) {
-			ast->capacity = 1;
-		} else {
-			ast->capacity *= 2;
-		}
-		Function *previous_functions = ast->functions;
-		ast->functions =
-		    (Function *)malloc(ast->capacity * sizeof(Function));
-		for (int i = 0; i < ast->length - 1; i++) {
-			ast->functions[i] = previous_functions[i];
-		}
-		free(previous_functions);
-	}
-	ast->functions[ast->length - 1] = function;
-}
-
-///// ----- fprintf FUNCTIONS ----- /////
-
-void fprintf_program_type(FILE *file, ProgramType *program_type) {
-	switch (*program_type) {
-	case NONE:
-		fprintf(file, "none");
-		break;
-	case U8_T:
-		fprintf(file, "u8");
-		break;
-	case U16_T:
-		fprintf(file, "u16");
-		break;
-	case VOID_T:
-		fprintf(file, "void");
-		break;
-	}
-}
-
-void fprintf_expression(FILE *file, Expression *expr) {
-	switch (expr->tag) {
-	case LET_E:
-		fprintf(file, "let ");
-		fprintf(file, "%s", expr->let.var);
-		if (expr->let.type != NONE) {
-			fprintf(file, ": ");
-			fprintf_program_type(file, &expr->let.type);
-		}
-		fprintf(file, " = ");
-		fprintf_expression(file, expr->let.e);
-		break;
-	case ADD_E:
-		fprintf_expression(file, expr->add.lhs);
-		fprintf(file, " + ");
-		fprintf_expression(file, expr->add.rhs);
-		break;
-	case SUB_E:
-		fprintf_expression(file, expr->add.lhs);
-		fprintf(file, " - ");
-		fprintf_expression(file, expr->add.rhs);
-		break;
-	case VARIABLE_E:
-		fprintf(file, "%s", expr->variable.name);
-		break;
-	case NUMBER_E:
-		if (expr->number.is_written_in_hexa) {
-			fprintf(file, "0x%x", expr->number.value);
-		} else {
-			fprintf(file, "%d", expr->number.value);
-		}
-		break;
-	case SEQUENCE_E:
-		for (int i = 0; i < expr->sequence.length; i++) {
-			fprintf_expression(file, &expr->sequence.list[i]);
-			if (i != expr->sequence.length) {
-				fprintf(file, ";\n");
-			}
-		}
-		break;
-	case ASSIGN_E:
-		fprintf(file, "%s", expr->assign.var);
-		fprintf(file, " = ");
-		fprintf_expression(file, expr->assign.e);
-		break;
-	case DEREF_ASSIGN_E:
-		fprintf(file, "*");
-		fprintf_expression(file, expr->deref_assign.e1);
-		fprintf(file, " = ");
-		fprintf_expression(file, expr->deref_assign.e2);
-		break;
-	case DEREF_E:
-		fprintf(file, "*");
-		fprintf_expression(file, expr->deref.e);
-		break;
-	case RETURN_E:
-		fprintf(file, "return ");
-		fprintf_expression(file, expr->ret.e);
-		break;
-	case FUNCTION_CALL_E:
-		fprintf(file, "%s()", expr->function_call.name);
-		break;
-	case CHAR_LITERAL_E:
-		fprintf(file, "'%c'", expr->char_literal.c);
-		break;
-	case STRING_LITERAL_E:
-		fprintf(file, "\"%c\"", expr->char_literal.c);
-		break;
-	}
-}
-
-void fprintf_function(FILE *file, Function *function) {
-	fprintf(file, "fn %s (", function->name);
-	for (int i = 0; i < function->args.length; i++) {
-		fprintf(file, "%s :", function->args.args[i].name);
-		fprintf_program_type(file, &function->args.args[i].type);
-		if (i != function->args.length - 1) {
-			fprintf(file, ",");
-		}
-	}
-	fprintf(file, ") ");
-	fprintf_program_type(file, &function->type);
-	fprintf(file, " = {\n");
-	fprintf_expression(file, function->expr);
-	fprintf(file, "\n};");
-}
-
-// Input :
-// - file name to write the tokens
-// - Ast that is goinf to be written in the file
-void fprintf_ast(FILE *file, Ast *ast) {
-	for (int i = 0; i < ast->length; i++) {
-		fprintf_function(file, &ast->functions[i]);
-		fprintf(file, "\n");
-	}
-}
-
-void fprintf_line_column(ParseState *state) {
-	fprintf(state->error,
-		"At line %d, column %d: ", current_token(state).line,
-		current_token(state).column);
-}
-
-void fprintf_current_token(ParseState *state) {
-	fprintf(state->error, "'");
-	fprintf_token(state->error, &state->tokens->tokens[state->index]);
-	// fprintf(state->error, "' a");
-	// fprintf_token_type(state->error,
-	// 		   &state->tokens->tokens[state->index].type);
-}
-
 ///// ----- PARSE FUNCTIONS ----- /////
 
 bool parse_token_type(ParseState *state, TokenType token_type, bool required) {
@@ -305,7 +64,7 @@ char *parse_identifier(ParseState *state, bool required) {
 
 Expression *parse_number(ParseState *state) {
 	// Number in hexadecimal form "0x123" (lex as '0' 'x123')
-	if(current_token(state).type == NUMBER &&
+	if (current_token(state).type == NUMBER &&
 	    strlen(current_token(state).text) == 1 &&
 	    state->tokens->tokens[state->index].text[0] == '0') {
 		state->index++;
@@ -354,7 +113,8 @@ Expression *parse_args_call(ParseState *state, bool required);
 // TODO
 Expression *parse_args_def(ParseState *state, bool required);
 
-Expression *parse_expr_1(ParseState *state, bool required);
+// Expression *parse_expr_add_sub(ParseState *state, bool required);
+Expression *parse_binary_expr(ParseState *state, bool required);
 
 Expression *parse_let(ParseState *state) {
 	if (!parse_token_type(state, LET, false)) {
@@ -377,7 +137,7 @@ Expression *parse_let(ParseState *state) {
 		state->abort = true;
 		return NULL;
 	}
-	Expression *e = parse_expr_1(state, true);
+	Expression *e = parse_binary_expr(state, true);
 	if (state->abort || e == NULL) {
 		state->abort = true;
 		return NULL;
@@ -395,18 +155,33 @@ Expression *parse_deref_assign_or_deref(ParseState *state) {
 		state->abort = false;
 		return NULL;
 	}
-	Expression *e1 = parse_expr_1(state, true);
+
+	Expression *e1 = parse_binary_expr(state, true);
 	if (state->abort || e1 == NULL) {
 		state->abort = true;
 		return NULL;
 	}
+
+	if (e1->tag == ASSIGN_E) {
+		Expression *variable = malloc(sizeof(*variable));
+		variable->tag = VARIABLE_E;
+		variable->variable.name = e1->assign.var;
+
+		Expression *save_expr = e1->assign.e;
+
+		e1->tag = DEREF_ASSIGN_E;
+		e1->deref_assign.e2 = save_expr;
+		e1->deref_assign.e1 = variable;
+		return e1;
+	}
+
 	if (!parse_token_type(state, EQUAL, false)) {
 		Expression *expr = malloc(sizeof(*expr));
 		expr->tag = DEREF_E;
 		expr->deref.e = e1;
 		return expr;
 	}
-	Expression *e2 = parse_expr_1(state, true);
+	Expression *e2 = parse_binary_expr(state, true);
 	if (state->abort || e2 == NULL) {
 		state->abort = true;
 		return NULL;
@@ -423,7 +198,7 @@ Expression *parse_return(ParseState *state) {
 		state->abort = false;
 		return NULL;
 	}
-	Expression *e = parse_expr_1(state, true);
+	Expression *e = parse_binary_expr(state, true);
 	if (state->abort || e == NULL) {
 		state->abort = true;
 		return NULL;
@@ -453,7 +228,7 @@ Expression *parse_func_call_or_var_assign_or_var(ParseState *state) {
 	}
 
 	if (parse_token_type(state, EQUAL, false)) {
-		Expression *e = parse_expr_1(state, true);
+		Expression *e = parse_binary_expr(state, true);
 		if (state->abort || e == NULL) {
 			state->abort = true;
 			return NULL;
@@ -471,114 +246,71 @@ Expression *parse_func_call_or_var_assign_or_var(ParseState *state) {
 	return expr;
 }
 
-Expression *parse_expr_2(ParseState *state, bool required) {
+Expression *parse_unary_expr(ParseState *state, bool required) {
 	Expression *e = NULL;
-
-	// Char Literal: 'c'
-	e = parse_char_literal(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	// TODO string literal
-
-	// Let: let var = e
-	e = parse_let(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	// Deref Assign or Deref:  *e = e  OR  *e
-	e = parse_deref_assign_or_deref(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	// Return : return e
-	e = parse_return(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	// Function call OR Assign OR Var : ident() OR ident = e OR ident
-	e = parse_func_call_or_var_assign_or_var(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	// NUMBER : n
-	e = parse_number(state);
-	if (state->abort) {
-		return NULL;
-	}
-	if (e != NULL) {
-		return e;
-	}
-
-	if (required) {
-		fprintf(state->error,
-			"Expected an Expression2 at line %d and column %d",
-			current_token(state).line, current_token(state).column);
-		fprintf(state->error, "\n");
+	Expression *(*parse_unary[6])(ParseState *) = {
+	    parse_char_literal,
+	    parse_let,
+	    parse_deref_assign_or_deref,
+	    parse_return,
+	    parse_func_call_or_var_assign_or_var,
+	    parse_number,
+	};
+	for (int i = 0; i < 6; i++) {
+		e = parse_unary[i](state);
+		if (state->abort) {
+			return NULL;
+		}
+		if (e != NULL) {
+			return e;
+		}
 	}
 	return NULL;
 }
 
-Expression *parse_expr_1(ParseState *state, bool required) {
-	Expression *lhs = parse_expr_2(state, true);
-	if (state->abort || lhs == NULL) {
+Expression *parse_binary_expr(ParseState *state, bool required) {
+	Expression *expr = parse_unary_expr(state, true);
+	if (state->abort || expr == NULL) {
 		if (required) {
 			fprintf_line_column(state);
 			fprintf(state->error, "Expected an Expression1 \n");
 		}
 		return NULL;
 	}
-
-	if (parse_token_type(state, PLUS, false)) {
-		Expression *rhs = parse_expr_1(state, true);
+	while (true) {
+		TokenType type = VOID;
+		TokenType bin_op[4] = {PLUS, MULT, MINUS, DIVIDE};
+		for (int i = 0; i < 4; i++) {
+			if (parse_token_type(state, bin_op[i], false)) {
+				type = bin_op[i];
+				break;
+			}
+		}
+		if (type == VOID) {
+			break;
+		}
+		ExpressionType next_tag = token_type_to_binary_tag(type);
+		Expression *rhs = parse_unary_expr(state, true);
 		if (state->abort || rhs == NULL) {
-			state->abort = required;
-			free(lhs);
+			state->abort = true;
+			expression_delete(expr, true);
 			return NULL;
 		}
-
-		Expression *expr = malloc(sizeof(*expr));
-		expr->tag = ADD_E;
-		expr->add.lhs = lhs;
-		expr->add.rhs = rhs;
-		return expr;
-	}
-
-	if (parse_token_type(state, MINUS, false)) {
-		Expression *rhs = parse_expr_1(state, true);
-		if (state->abort || rhs == NULL) {
-			state->abort = required;
-			free(lhs);
-			return NULL;
+		if (precedence(expr->tag) <= precedence(next_tag)) {
+			Expression *lhs = expr;
+			expr = (Expression *)malloc(sizeof(*expr));
+			expr->tag = next_tag;
+			expr->binary.lhs = lhs;
+			expr->binary.rhs = rhs;
+		} else {
+			Expression *lhs = (Expression *)malloc(sizeof(*expr));
+			lhs->tag = next_tag;
+			lhs->binary.lhs = expr->binary.rhs;
+			lhs->binary.rhs = rhs;
+			expr->binary.rhs = lhs;
 		}
-		Expression *expr = malloc(sizeof(*expr));
-		expr->tag = SUB_E;
-		expr->sub.lhs = lhs;
-		expr->sub.rhs = rhs;
-		return expr;
 	}
-
-	return lhs;
+	return expr;
 }
 
 Expression *parse_expr(ParseState *state) {
@@ -594,7 +326,7 @@ Expression *parse_expr(ParseState *state) {
 		if (expr == NULL) {
 			required = true;
 		}
-		Expression *expr_next = parse_expr_1(state, required);
+		Expression *expr_next = parse_binary_expr(state, required);
 		if (state->abort) {
 			return NULL;
 		}

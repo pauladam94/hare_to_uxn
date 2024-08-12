@@ -86,6 +86,8 @@ typedef struct { // 0x10000 bytes = 64ko of memory
 	bool is_written[0x10000];
 } Program;
 
+Instruction binary_tag_to_instruction(ExpressionType type);
+
 // clang-format off
 void fprintf_uxn_instruction(FILE *file, Instruction *inst);
 // clang-format off
