@@ -246,7 +246,7 @@ Expression *parse_func_call_or_var_assign_or_var(ParseState *state) {
 	return expr;
 }
 
-Expression *parse_unary_expr(ParseState *state, bool required) {
+Expression *parse_unary_expr(ParseState *state) {
 	Expression *e = NULL;
 	Expression *(*parse_unary[6])(ParseState *) = {
 	    parse_char_literal,
@@ -269,7 +269,7 @@ Expression *parse_unary_expr(ParseState *state, bool required) {
 }
 
 Expression *parse_binary_expr(ParseState *state, bool required) {
-	Expression *expr = parse_unary_expr(state, true);
+	Expression *expr = parse_unary_expr(state);
 	if (state->abort || expr == NULL) {
 		if (required) {
 			fprintf_line_column(state);
@@ -290,7 +290,7 @@ Expression *parse_binary_expr(ParseState *state, bool required) {
 			break;
 		}
 		ExpressionType next_tag = token_type_to_binary_tag(type);
-		Expression *rhs = parse_unary_expr(state, true);
+		Expression *rhs = parse_unary_expr(state);
 		if (state->abort || rhs == NULL) {
 			state->abort = true;
 			expression_delete(expr, true);

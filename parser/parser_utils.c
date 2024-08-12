@@ -131,7 +131,7 @@ int precedence(ExpressionType type) {
 	default:
 		return 0;
 	}
-};
+}
 
 TokenType binary_tag_to_token_type(ExpressionType type) {
 	switch (type) {
