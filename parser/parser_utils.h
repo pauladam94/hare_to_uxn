@@ -119,12 +119,13 @@ typedef struct {
 
 typedef struct {
 	FILE *error; // stream to output errors
-
-	Tokens *tokens; // list of tokens
-	uint32_t index; // where we are in the tokens
+	Tokens *tokens;
+	uint32_t index; // position in the tokens
 
 	bool abort; // have to stop the parsing or error
-} ParseState;	    // parse_state->worked
+} ParseState;
+
+// Get the current_token given the parsing state
 Token current_token(ParseState *state);
 
 /// Deletes completely recursively what expression points to

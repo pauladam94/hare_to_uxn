@@ -5,48 +5,39 @@ If the `tokens` given does not respect the grammar of the Hare programming
 language. Then the `parse` functions returns NULL and write errors in the
 `error` stream.
 
-PARSE FUNCTIONS API
+# PARSE FUNCTIONS API
 
-bool parse_[name] (
-FILE* error,
-Tokens *tokens,
-uint32_t *index,
-[Name]* [name],
-bool should_work
-);
+## Parse State
 
-# return true
-- we managed to parse [name] element from 'tokens' at the position 'index'.
-- 'index' has increase according to the number of tokens read
-- 'tokens' has not been mutated
-- 'name' contains some sort of result from what has been parsed
-- 'err' has not been mutated
-- 'should_work' is not taken into account
+```C
+typedef struct {
+    FILE *error;    // stream to output errors
+    Tokens *tokens;
+    uint32_t index; // position in the tokens
+    bool abort;     // have to stop the parsing or error
+} ParseState;
+```
 
-# return false
-- we did not managed to parse [name] element from 'tokens' at 'index'.
-- 'index' is the value as before calling the function
-- 'tokens' has not been mutated
-- 'name' has not been changed from his state before the call
-- 'should_work' : true
-    - 'error' is mutated with an error saying we expected something specific
-- 'should_work' : false
-    - 'error' is not mutated
+## Functions
 
-The should_work boolean means that the fonction should work or it's an
-error. Inside a function, if you try to parse 'let', should_work = false
-because other possibility can be parsed. 'let' is not the only possibility.
+```C
+// returns on the stack for simple parsing
+// Error handling with `state->abort` only
+[Name] parse_[name] (ParseState* state);
 
+// return a pointer
+// Error handling with 
+Expression* parse_[name] (ParseState* state);
+```
 
-typedef {
-    FILE* error;
+## Error handling
+If an error occured :
+- error message is written in the `state->error` `file`
+- returns NULL if it couldn't parse [name].
+- change `state->abort` to `false` to say that the parsing should stop.
+- `state->index` should not change
 
-    Tokens* tokens;
-    uint32_t index;
-
-    bool worked;
-    bool should_work;
-    bool error_happened; // have to stop the parsing real error
-} ParseState; // parse_state->worked
-
-Expression parse_[name] (ParseState* parse_state);
+## Success
+If no error occured :
+- `state->index` move forward to the next tokens
+- the function allocates what it has parse and return it

@@ -8,15 +8,15 @@
 #include <string.h>
 
 typedef struct {
-	FILE *error;
-	FILE *file;
-	int size_buff;
-	int pos;
-	char buff[100];
-	uint16_t line;
-	uint16_t column;
-	bool failed;
-	bool empty_token;
+	FILE *error;	  // where error message should be written
+	FILE *file;	  // file that is being lexed
+	int size_buff;	  // size off buffer contain
+	int pos;	  // position inside the buffer
+	char buff[100];	  // buff that contains the line of `error`
+	uint16_t line;	  // current line in `file`
+	uint16_t column;  // current column in `file`
+	bool failed;	  // true if lexinng failed
+	bool empty_token; // true if empty token is parse (mostly white space)
 } LexerState;
 
 ///// ----- TOKEN ----- /////
