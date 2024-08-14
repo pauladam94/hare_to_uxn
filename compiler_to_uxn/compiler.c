@@ -18,6 +18,11 @@ typedef struct {
 	char **names;
 } VariableLayout;
 
+void var_layout_delete(VariableLayout vars) {
+	free(vars.types);
+	free(vars.names);
+}
+
 void var_layout_resize(VariableLayout *vars) {
 	if (vars->capacity < vars->length) {
 		if (vars->capacity == 0) {
@@ -202,8 +207,7 @@ void append_instruction(PartProgram *p, char *comment, Instruction inst) {
 
 /// Write a partial function to an UxnProgram a a certain 'pos'
 /// This functions delete PartialUxnProgram
-void write_part_program(FILE *error, PartProgram part_program, Program *p,
-			uint16_t pos) {
+void write_part_program(PartProgram part_program, Program *p, uint16_t pos) {
 	for (uint16_t i = 0; i < part_program.length; i++) {
 		p->comments[pos + i] = part_program.comments[i];
 		p->is_written[pos + i] = true;
@@ -254,7 +258,13 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 	case ADD_E:
 	case SUB_E:
 	case MULT_E:
-	case DIV_E: {
+	case DIV_E:
+	case EQUAL_EQUAL_E:
+	case NOT_EQUAL_E:
+	case GREATER_THAN_E:
+	case GREATER_THAN_EQUAL_E:
+	case LESS_THAN_E:
+	case LESS_THAN_EQUAL_E: {
 		PartProgram *lhs = compile_expr(error, expr->binary.lhs, vars);
 		if (lhs == NULL) {
 			break;
@@ -296,8 +306,7 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		}
 
 		// Get the address of this new variable
-		VariableInfo var_info =
-		    var_layout_get_addr(vars, expr->assign.var);
+		VariableInfo var_info = var_layout_get_addr(vars, name);
 
 		// Right now we assume that the value is of size 8 bits
 		append_instruction(assign, NULL, LIT);
@@ -372,6 +381,16 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		fprintf(error, "string literal todo\n");
 		break;
 	}
+	case IF_ELSE_E: {
+		PartProgram *if_body =
+		    compile_expr(error, expr->if_else.if_body, vars);
+		PartProgram *else_body =
+		    compile_expr(error, expr->if_else.else_body, vars);
+		PartProgram *cond =
+		    compile_expr(error, expr->if_else.cond, vars);
+		fprintf(error, "if else todo\n");
+		break;
+	}
 	}
 	return NULL;
 }
@@ -388,12 +407,12 @@ PartProgram compile_function(FILE *error, Function *function) {
 	PartProgram *expr = compile_expr(error, function->expr, &vars);
 	if (expr == NULL) {
 		result.length = 0;
-		return result;
 	} else {
 		result = *expr;
 		free(expr);
-		return result;
 	}
+	var_layout_delete(vars);
+	return result;
 }
 
 Program *compile_to_uxn(FILE *error, Ast *ast) {
@@ -403,8 +422,7 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 		return NULL;
 	}
 
-	// two functions with the same name => stop
-	// TODO or not ?
+	// TODO: two functions with the same name => stop
 
 	// Get the 'main' if there is one else stop the compilation
 	bool found_main = false;
@@ -466,9 +484,11 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 		program->memory[i] = BRK;	    // not useful
 	}
 	for (int i = 0; i < ast->length; i++) {
-		write_part_program(error, func_binary[i], program, func_pos[i]);
+		write_part_program(func_binary[i], program, func_pos[i]);
 	}
 
+	free(func_binary);
+	free(func_pos);
 	ast_delete(ast);
 	return program;
 }

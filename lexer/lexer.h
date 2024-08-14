@@ -19,24 +19,28 @@ typedef enum {
 	LPAREN,	   // (
 	RPAREN,	   // )
 
-	FN,	    // fn
-	LET,	    // let
-	EQUAL,	    // =
-	EQUALEQUAL, // ==
-	RETURN,	    // return
-	IF,	    // if
-	ELSE,	    // else
+	FN,	     // fn
+	LET,	     // let
+	EQUAL,	     // =
+	EQUAL_EQUAL, // ==
+	NOT_EQUAL,   // !=
+	RETURN,	     // return
+	IF,	     // if
+	ELSE,	     // else
+	FOR,	     // for
 
 	VOID, // void
 	U8,   // u8
 	U16,  // u16
 
-	PLUS,	// +
-	MINUS,	// -
-	MULT,	// *
-	DIVIDE, // /
-
-	SINGLE_QUOTE, // '
+	PLUS,		    // +
+	MINUS,		    // -
+	MULT,		    // *
+	DIVIDE,		    // /
+	LESS_THAN,	    // <
+	LESS_THAN_EQUAL,    // <=
+	GREATER_THAN,	    // >
+	GREATER_THAN_EQUAL, // >=
 } TokenType;
 
 typedef struct {

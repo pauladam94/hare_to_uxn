@@ -19,6 +19,12 @@ void expression_delete(Expression *expr, bool delete_itself) {
 	case SUB_E:
 	case MULT_E:
 	case DIV_E:
+	case EQUAL_EQUAL_E:
+	case NOT_EQUAL_E:
+	case GREATER_THAN_EQUAL_E:
+	case GREATER_THAN_E:
+	case LESS_THAN_EQUAL_E:
+	case LESS_THAN_E:
 		expression_delete(expr->binary.lhs, true);
 		expression_delete(expr->binary.rhs, true);
 		break;
@@ -54,6 +60,13 @@ void expression_delete(Expression *expr, bool delete_itself) {
 		break;
 	case STRING_LITERAL_E:
 		break;
+	case IF_ELSE_E:
+		expression_delete(expr->if_else.if_body, true);
+		expression_delete(expr->if_else.cond, true);
+		if (expr->if_else.else_body == NULL) {
+			break;
+		}
+		expression_delete(expr->if_else.else_body, true);
 	}
 	if (delete_itself) {
 		free(expr);
@@ -122,6 +135,13 @@ void fprintf_program_type(FILE *file, ProgramType *program_type) {
 
 int precedence(ExpressionType type) {
 	switch (type) {
+	case NOT_EQUAL_E:
+	case EQUAL_EQUAL_E:
+	case GREATER_THAN_EQUAL_E:
+	case GREATER_THAN_E:
+	case LESS_THAN_EQUAL_E:
+	case LESS_THAN_E:
+		return 3;
 	case ADD_E:
 	case SUB_E:
 		return 2;
@@ -143,6 +163,18 @@ TokenType binary_tag_to_token_type(ExpressionType type) {
 		return MULT;
 	case DIV_E:
 		return DIVIDE;
+	case NOT_EQUAL_E:
+		return NOT_EQUAL;
+	case EQUAL_EQUAL_E:
+		return EQUAL_EQUAL;
+	case GREATER_THAN_EQUAL_E:
+		return GREATER_THAN_EQUAL;
+	case GREATER_THAN_E:
+		return GREATER_THAN;
+	case LESS_THAN_EQUAL_E:
+		return LESS_THAN_EQUAL;
+	case LESS_THAN_E:
+		return LESS_THAN;
 	default:
 		return VOID;
 	}
@@ -158,6 +190,18 @@ ExpressionType token_type_to_binary_tag(TokenType type) {
 		return MULT_E;
 	case DIVIDE:
 		return DIV_E;
+	case NOT_EQUAL:
+		return EQUAL_EQUAL_E;
+	case EQUAL_EQUAL:
+		return EQUAL_EQUAL_E;
+	case GREATER_THAN_EQUAL:
+		return GREATER_THAN_EQUAL_E;
+	case GREATER_THAN:
+		return GREATER_THAN_E;
+	case LESS_THAN_EQUAL:
+		return LESS_THAN_EQUAL_E;
+	case LESS_THAN:
+		return LESS_THAN_E;
 	default:
 		printf("unreachable");
 		return LET_E; // this should no happend
@@ -180,6 +224,12 @@ void fprintf_expression(FILE *file, Expression *expr) {
 	case SUB_E:
 	case MULT_E:
 	case DIV_E:
+	case NOT_EQUAL_E:
+	case EQUAL_EQUAL_E:
+	case GREATER_THAN_EQUAL_E:
+	case GREATER_THAN_E:
+	case LESS_THAN_EQUAL_E:
+	case LESS_THAN_E:
 		fprintf_expression(file, expr->binary.lhs);
 		fprintf(file, " ");
 		TokenType type = binary_tag_to_token_type(expr->tag);
@@ -237,6 +287,18 @@ void fprintf_expression(FILE *file, Expression *expr) {
 	case STRING_LITERAL_E:
 		fprintf(file, "\"%c\"", expr->char_literal.c);
 		break;
+	case IF_ELSE_E:
+		fprintf(file, "if (");
+		fprintf_expression(file, expr->if_else.cond);
+		fprintf(file, ") {\n");
+		fprintf_expression(file, expr->if_else.if_body);
+		fprintf(file, "}");
+		if (expr->if_else.else_body == NULL) {
+			break;
+		}
+		fprintf(file, " else {");
+		fprintf_expression(file, expr->if_else.else_body);
+		fprintf(file, "\n}");
 	}
 }
 

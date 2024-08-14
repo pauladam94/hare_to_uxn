@@ -10,6 +10,18 @@ Instruction binary_tag_to_instruction(ExpressionType type) {
 		return MUL;
 	case DIV_E:
 		return DIV;
+	case NOT_EQUAL_E:
+		return NEQ;
+	case EQUAL_EQUAL_E:
+		return EQU;
+	case GREATER_THAN_EQUAL_E:
+		return GTH;
+	case GREATER_THAN_E:
+		return GTH;
+	case LESS_THAN_EQUAL_E:
+		return LTH;
+	case LESS_THAN_E:
+		return LTH;
 	default:
 		return BRK;
 	}

@@ -10,10 +10,18 @@ typedef enum {
 
 typedef enum {
 	LET_E,
+
 	ADD_E,
 	SUB_E,
 	MULT_E,
 	DIV_E,
+	NOT_EQUAL_E,
+	EQUAL_EQUAL_E,
+	GREATER_THAN_EQUAL_E,
+	GREATER_THAN_E,
+	LESS_THAN_EQUAL_E,
+	LESS_THAN_E,
+
 	SEQUENCE_E,
 	ASSIGN_E,
 	DEREF_ASSIGN_E,
@@ -24,6 +32,7 @@ typedef enum {
 	FUNCTION_CALL_E,
 	CHAR_LITERAL_E,
 	STRING_LITERAL_E,
+	IF_ELSE_E,
 } ExpressionType;
 
 typedef struct Expression {
@@ -70,6 +79,11 @@ typedef struct Expression {
 		struct {
 			char c;
 		} char_literal;
+		struct {
+			struct Expression *cond;
+			struct Expression *if_body;
+			struct Expression *else_body;
+		} if_else;
 	};
 	// The _E means that is used for expression
 	// it is used to sisambiguates with TokenType enum
@@ -109,9 +123,8 @@ typedef struct {
 	Tokens *tokens; // list of tokens
 	uint32_t index; // where we are in the tokens
 
-	bool abort;  // have to stop the parsing
-	bool failed; // useful for functions that don't return a pointer
-} ParseState;	     // parse_state->worked
+	bool abort; // have to stop the parsing or error
+} ParseState;	    // parse_state->worked
 Token current_token(ParseState *state);
 
 /// Deletes completely recursively what expression points to

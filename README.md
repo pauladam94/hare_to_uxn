@@ -49,3 +49,10 @@ To check the number of C line code `git ls-files '*.c' '*.h' | xargs wc -l`.
 the tokens that lexify gave out
 - the parser definitely leak a bit, because it tries to parse some thing and
 then does not use them.
+
+
+
+
+## TODO ERRORS
+- segault 122_if
+- weird error 220 missing ; at lign 0 column 0; (end of function);

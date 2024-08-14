@@ -43,7 +43,7 @@ ProgramType parse_program_type(ParseState *state, bool required) {
 
 	ProgramType *type = malloc(sizeof(*type));
 	*type = U16_T;
-	state->failed = true;
+	state->abort = true;
 	return VOID_T;
 }
 
@@ -67,10 +67,19 @@ Expression *parse_number(ParseState *state) {
 	if (current_token(state).type == NUMBER &&
 	    strlen(current_token(state).text) == 1 &&
 	    state->tokens->tokens[state->index].text[0] == '0') {
+		char *prev_text = current_token(state).text;
 		state->index++;
 		int i;
 		Expression *e = malloc(sizeof(*e));
-		if (sscanf(current_token(state).text + 1, "%x", &i) != EOF) {
+		// TODO check more things if this really a number
+
+		if (current_token(state).type == IDENTIFIER &&
+		    current_token(state).text[0] == 'x' &&
+		    sscanf(current_token(state).text + 1, "%x", &i) != EOF
+
+		) {
+			free(prev_text);
+			free(current_token(state).text);
 			state->index++;
 			e->tag = NUMBER_E;
 			e->number.value = (uint32_t)i;
@@ -86,9 +95,7 @@ Expression *parse_number(ParseState *state) {
 		e->tag = NUMBER_E;
 		e->number.value =
 		    (uint32_t)atoi(state->tokens->tokens[state->index].text);
-		// Here this cannot be free
-		// because it is not necessarely the last time we look
-		// at it
+		free(current_token(state).text);
 		e->number.is_written_in_hexa = false;
 		state->index++;
 		return e;
@@ -108,14 +115,53 @@ Expression *parse_char_literal(ParseState *state) {
 	return NULL;
 }
 
-// TODO
-Expression *parse_args_call(ParseState *state, bool required);
-// TODO
-Expression *parse_args_def(ParseState *state, bool required);
-
 // Expression *parse_expr_add_sub(ParseState *state, bool required);
 Expression *parse_binary_expr(ParseState *state, bool required);
+Expression *parse_expr(ParseState *state);
 
+Expression *parse_if_else(ParseState *state) {
+	if (!parse_token_type(state, IF, false)) {
+		return NULL;
+	}
+	if (!parse_token_type(state, LPAREN, true)) {
+		state->abort = true;
+		return NULL;
+	}
+	Expression *cond = parse_binary_expr(state, true);
+	if (cond == NULL) {
+		state->abort = true;
+		return NULL;
+	}
+	if (!parse_token_type(state, RPAREN, true)) {
+		state->abort = true;
+		return NULL;
+	}
+	Expression *if_body = parse_expr(state);
+	if (if_body == NULL) {
+		state->abort = true;
+		return NULL;
+	}
+	if (parse_token_type(state, ELSE, false)) {
+		Expression *else_body = parse_expr(state);
+		if (else_body == NULL) {
+			state->abort = true;
+			return NULL;
+		}
+		Expression *expr = malloc(sizeof(*expr));
+		expr->tag = IF_ELSE_E;
+		expr->if_else.if_body = if_body;
+		expr->if_else.cond = cond;
+		expr->if_else.else_body = else_body;
+		return expr;
+	}
+	Expression *expr = malloc(sizeof(*expr));
+	expr->tag = IF_ELSE_E;
+	expr->if_else.if_body = if_body;
+	expr->if_else.cond = cond;
+	expr->if_else.else_body = NULL;
+
+	return expr;
+}
 Expression *parse_let(ParseState *state) {
 	if (!parse_token_type(state, LET, false)) {
 		state->abort = false;
@@ -132,8 +178,7 @@ Expression *parse_let(ParseState *state) {
 	}
 
 	ProgramType type = parse_program_type(state, true);
-	if (state->failed || !parse_token_type(state, EQUAL, true)) {
-		state->failed = true;
+	if (state->abort || !parse_token_type(state, EQUAL, true)) {
 		state->abort = true;
 		return NULL;
 	}
@@ -248,15 +293,13 @@ Expression *parse_func_call_or_var_assign_or_var(ParseState *state) {
 
 Expression *parse_unary_expr(ParseState *state) {
 	Expression *e = NULL;
-	Expression *(*parse_unary[6])(ParseState *) = {
-	    parse_char_literal,
-	    parse_let,
-	    parse_deref_assign_or_deref,
-	    parse_return,
-	    parse_func_call_or_var_assign_or_var,
+	Expression *(*parse_unary[7])(ParseState *) = {
+	    parse_char_literal, parse_let,
+	    parse_if_else,	parse_deref_assign_or_deref,
+	    parse_return,	parse_func_call_or_var_assign_or_var,
 	    parse_number,
 	};
-	for (int i = 0; i < 6; i++) {
+	for (int i = 0; i < 7; i++) {
 		e = parse_unary[i](state);
 		if (state->abort) {
 			return NULL;
@@ -273,14 +316,18 @@ Expression *parse_binary_expr(ParseState *state, bool required) {
 	if (state->abort || expr == NULL) {
 		if (required) {
 			fprintf_line_column(state);
-			fprintf(state->error, "Expected an Expression1 \n");
+	 			fprintf(state->error, "Expected an Expression1 \n");
 		}
 		return NULL;
 	}
 	while (true) {
 		TokenType type = VOID;
-		TokenType bin_op[4] = {PLUS, MULT, MINUS, DIVIDE};
-		for (int i = 0; i < 4; i++) {
+		TokenType bin_op[10] = {PLUS,	      MULT,
+					MINUS,	      DIVIDE,
+					EQUAL_EQUAL,  NOT_EQUAL,
+					LESS_THAN,    LESS_THAN_EQUAL,
+					GREATER_THAN, GREATER_THAN_EQUAL};
+		for (int i = 0; i < 10; i++) {
 			if (parse_token_type(state, bin_op[i], false)) {
 				type = bin_op[i];
 				break;
@@ -390,13 +437,11 @@ Args parse_args(ParseState *state) {
 
 		if (!parse_token_type(state, COLON, true)) {
 			state->abort = true;
-			state->failed = true;
 			return args;
 		}
 
 		ProgramType arg_type = parse_program_type(state, true);
-		if (state->failed) {
-			state->abort = true;
+		if (state->abort) {
 			return args;
 		}
 
@@ -438,7 +483,7 @@ Function *parse_function(ParseState *state, bool required) {
 	}
 
 	Args args = parse_args(state);
-	if (state->abort || state->failed) {
+	if (state->abort) {
 		state->abort = required;
 		return NULL;
 	}
@@ -449,7 +494,7 @@ Function *parse_function(ParseState *state, bool required) {
 	}
 
 	ProgramType type = parse_program_type(state, true);
-	if (state->failed) {
+	if (state->abort) {
 		state->abort = required;
 		return NULL;
 	}
@@ -483,7 +528,6 @@ Ast *parse(FILE *error, Tokens *tokens) {
 	state.tokens = tokens;
 	state.index = 0;
 	state.abort = false;
-	state.failed = false;
 
 	while (state.index < state.tokens->length) {
 		Function *function = parse_function(&state, true);
@@ -507,7 +551,10 @@ Ast *parse(FILE *error, Tokens *tokens) {
 		ast_delete(ast);
 		ast = NULL;
 	}
-	tokens_free_numbers(tokens);
+
+	// tokens_free_numbers(tokens);
+	// tokens_free_numbers(tokens);
+	free(tokens->tokens);
 	free(tokens);
 	return ast;
 }

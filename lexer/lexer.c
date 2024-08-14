@@ -48,14 +48,18 @@ Token token_append(Token token, char c) {
 	char *previous_text = token.text;
 
 	// Allocate one more char
+	// if (token_length == 2) { // TODO REMOVE
+	// 	printf("%s %c\n", token.text, c);
+	// }
 	token.text = (char *)malloc((token_length + 2) * sizeof(char));
 
 	// Reinitialize value according to the previous toke text
 	for (uint32_t i = 0; i < token_length; i++) {
 		token.text[i] = previous_text[i];
 	}
-
-	free(previous_text);
+	if (previous_text != NULL) {
+		free(previous_text);
+	}
 
 	token.text[token_length] = c;
 	token.text[token_length + 1] = 0;
@@ -121,11 +125,17 @@ void fprintf_token_type(FILE *file, TokenType *token_type) {
 	case ELSE:
 		fprintf(file, "else");
 		break;
+	case FOR:
+		fprintf(file, "for");
+		break;
 	case EQUAL:
 		fprintf(file, "=");
 		break;
-	case EQUALEQUAL:
+	case EQUAL_EQUAL:
 		fprintf(file, "==");
+		break;
+	case NOT_EQUAL:
+		fprintf(file, "!=");
 		break;
 	case U8:
 		fprintf(file, "u8");
@@ -145,8 +155,17 @@ void fprintf_token_type(FILE *file, TokenType *token_type) {
 	case DIVIDE:
 		fprintf(file, "/");
 		break;
-	case SINGLE_QUOTE:
-		fprintf(file, "'");
+	case LESS_THAN:
+		fprintf(file, "<");
+		break;
+	case LESS_THAN_EQUAL:
+		fprintf(file, "<=");
+		break;
+	case GREATER_THAN:
+		fprintf(file, ">");
+		break;
+	case GREATER_THAN_EQUAL:
+		fprintf(file, ">=");
 		break;
 	}
 }
@@ -214,22 +233,6 @@ void tokens_append(Tokens *tokens, Token token) {
 	tokens->tokens[tokens->length - 1] = token;
 }
 
-// TODO better : know if we have to free each indivual token or not.
-void tokens_free_numbers(Tokens *tokens) {
-	for (uint32_t i = 0; i < tokens->length; i++) {
-		if (tokens->tokens[i].text != NULL &&
-		    tokens->tokens[i].type == NUMBER) {
-			free(tokens->tokens[i].text);
-		}
-	}
-	if (tokens->tokens != NULL) {
-		free(tokens->tokens);
-		tokens->capacity = 0;
-		tokens->length = 0;
-		tokens->tokens = NULL;
-	}
-}
-
 void tokens_delete(Tokens *tokens) {
 	for (uint32_t i = 0; i < tokens->length; i++) {
 		if (tokens->tokens[i].text != NULL) {
@@ -277,7 +280,6 @@ Token next_char_literal(LexerState *state, char *c) {
 	Token token;
 	*c = next_char(state);
 	if (*c == '\'') {
-		// fprintf("don't accept empty char_literal");
 		state->failed = true;
 		token.type = CHAR_LITERAL;
 		return token;
@@ -372,6 +374,15 @@ Token next_ident(LexerState *state, char *c) {
 		} else if (strcmp("void", token.text) == 0) {
 			free(token.text);
 			return token_only_type(state, VOID);
+		} else if (strcmp("if", token.text) == 0) {
+			free(token.text);
+			return token_only_type(state, IF);
+		} else if (strcmp("else", token.text) == 0) {
+			free(token.text);
+			return token_only_type(state, ELSE);
+		} else if (strcmp("for", token.text) == 0) {
+			free(token.text);
+			return token_only_type(state, FOR);
 		} else if (strcmp("u8", token.text) == 0) {
 			free(token.text);
 			return token_only_type(state, U8);
@@ -438,10 +449,15 @@ Token next_token(LexerState *state, char *c) {
 		*c = next_char(state);
 		if (*c == '=') {
 			*c = next_char(state);
-			return token_only_type(state, EQUALEQUAL);
+			return token_only_type(state, EQUAL_EQUAL);
 		}
 		return token_only_type(state, EQUAL);
-		break;
+	case '!':
+		*c = next_char(state);
+		if (*c == '=') {
+			*c = next_char(state);
+			return token_only_type(state, NOT_EQUAL);
+		}
 	case '+':
 		token = token_only_type(state, PLUS);
 		break;
@@ -451,6 +467,20 @@ Token next_token(LexerState *state, char *c) {
 	case '*':
 		token = token_only_type(state, MULT);
 		break;
+	case '>':
+		*c = next_char(state);
+		if (*c == '=') {
+			*c = next_char(state);
+			return token_only_type(state, GREATER_THAN_EQUAL);
+		}
+		return token_only_type(state, GREATER_THAN);
+	case '<':
+		*c = next_char(state);
+		if (*c == '=') {
+			*c = next_char(state);
+			return token_only_type(state, LESS_THAN_EQUAL);
+		}
+		return token_only_type(state, LESS_THAN);
 	case '\'':
 		token = next_char_literal(state, c);
 		break;
@@ -490,10 +520,10 @@ Tokens *lexify(FILE *error, FILE *file) {
 			break;
 		}
 		Token token = next_token(&state, &c);
-		// if (state.failed) {
-		// 	tokens_delete(tokens);
-		// 	return NULL;
-		// }
+		if (state.failed) {
+			tokens_delete(tokens);
+			return NULL;
+		}
 
 		if (state.empty_token) {
 			state.empty_token = false;
