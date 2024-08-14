@@ -33,26 +33,15 @@ it.
 ### On Other Linux distribution
 You can use `uxn/uxnasm`, `uxn/uxncli` and `uxn/uxnemu` present in this
 repository. You either have to put them in our path so that `uxnasm` and
-`uxncli` are accessible for the make file. You can also change the command in
-the makefile.
+`uxncli` are accessible for file `test.c`. You can also change the syscall done
+at the end of `test.c` durint the execution phase.
 
 # Count the number of line of code
 To check the number of C line code `git ls-files '*.c' '*.h' | xargs wc -l`.
 
-# TODO
-- put 'FILE* error' always at the same place in every function (probably first)
-- parse hexa number
-- convert during parsing number string to real numbers
-
 # Memory Leak
-- the lexer is definitely leaking memory, everithing allocated is present in
-the tokens that lexify gave out
-- the parser definitely leak a bit, because it tries to parse some thing and
-then does not use them.
+- None in lexer, parser or compiler
 
-
-
-
-## TODO ERRORS
-- segault 122_if
+# TODO
 - weird error 220 missing ; at lign 0 column 0; (end of function);
+better error handling parser

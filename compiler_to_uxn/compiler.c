@@ -18,6 +18,11 @@ typedef struct {
 	char **names;
 } VariableLayout;
 
+typedef struct {
+
+	VariableLayout vars;
+} CompilerState;
+
 void var_layout_delete(VariableLayout vars) {
 	free(vars.types);
 	free(vars.names);
@@ -333,7 +338,8 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		if (e == NULL) {
 			break;
 		}
-		append_instruction(e, "deref", DEO);
+
+		append_instruction(e, "Deref", LDZ);
 		// append_intruction();
 		return e;
 	}
@@ -382,12 +388,33 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		break;
 	}
 	case IF_ELSE_E: {
-		PartProgram *if_body =
-		    compile_expr(error, expr->if_else.if_body, vars);
-		PartProgram *else_body =
-		    compile_expr(error, expr->if_else.else_body, vars);
 		PartProgram *cond =
 		    compile_expr(error, expr->if_else.cond, vars);
+		if (cond == NULL) {
+			fprintf(error, "Error compiling condition");
+			break;
+		}
+		PartProgram *if_body =
+		    compile_expr(error, expr->if_else.if_body, vars);
+		if (if_body == NULL) {
+			fprintf(error, "Error compiling if_body");
+			break;
+		}
+		PartProgram *else_body = NULL;
+		if (expr->if_else.else_body != NULL) {
+			else_body =
+			    compile_expr(error, expr->if_else.else_body, vars);
+			if (else_body == NULL) {
+				fprintf(error, "Error compiling else_body");
+				break;
+			}
+		}
+		uint16_t size = 0;
+		if (else_body != NULL) {
+			uint16_t size = else_body->length;
+			if_body = concat_program(else_body, if_body);
+			return if_body;
+		}
 		fprintf(error, "if else todo\n");
 		break;
 	}

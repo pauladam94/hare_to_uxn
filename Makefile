@@ -12,6 +12,10 @@ build: bin/test_all
 test: clean_results bin/test_all $(wildcard test/*/*_expected)
 	@start_time=$$(date +%s); \
 	number_test=0; \
+	echo "000-099 tests that should error"; \
+	echo "100-199 test for the lexer and parser"; \
+	echo "200-299 test for the compilater"; \
+	echo "300-399 complex real programs"; \
 	for dir in $(wildcard test/*); do \
 		./bin/test_all $$dir 2>&1 ; \
 		number_test=$$((number_test + 1)); \
