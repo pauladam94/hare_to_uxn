@@ -4,6 +4,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+// This files compiles a file into a uxntal
+// It dones way less error testing than `test.c`.
+
 int main(int argc, char **argv) {
 	if (argc != 3) {
 		printf("Error: usage %s [..].ha [..].uxntal\n", argv[0]);
@@ -42,7 +45,7 @@ int main(int argc, char **argv) {
 	}
 
 	// Compiler
-	UxnProgram *uxn_program = compile_to_uxn(stdout, ast);
+	Program *uxn_program = compile_to_uxn(stdout, ast);
 	if (uxn_program == NULL) {
 		red();
 		printf("[Compiler Error]\n");

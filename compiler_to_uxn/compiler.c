@@ -449,8 +449,6 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 		return NULL;
 	}
 
-	// TODO: two functions with the same name => stop
-
 	// Get the 'main' if there is one else stop the compilation
 	bool found_main = false;
 	int index_main = 0;
