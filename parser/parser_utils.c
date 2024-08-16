@@ -296,7 +296,7 @@ void fprintf_expression(FILE *file, Expression *expr) {
 		if (expr->if_else.else_body == NULL) {
 			break;
 		}
-		fprintf(file, " else {");
+		fprintf(file, " else {\n");
 		fprintf_expression(file, expr->if_else.else_body);
 		fprintf(file, "\n}");
 	}

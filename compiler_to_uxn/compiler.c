@@ -19,7 +19,7 @@ typedef struct {
 } VariableLayout;
 
 typedef struct {
-
+	FILE *error;
 	VariableLayout vars;
 } CompilerState;
 
@@ -82,6 +82,13 @@ VariableInfo var_layout_get_addr(VariableLayout *vars, char *name) {
 
 ///// ----- PARTIAL PROGRAM ----- /////
 
+typedef struct {
+	uint16_t capacity;
+	uint16_t length;
+	uint16_t *pos_fun;
+	char **waiting_fun;
+} FunWaitAddr;
+
 /// The partial Uxn Program is used when compiling the AST piece by piece.
 /// At the end of the traversal of the AST, we should assemble all those partial
 /// uxn program to form the final complete uxn program
@@ -91,6 +98,7 @@ typedef struct {
 	char **comments;
 	bool *is_instruction;
 	Instruction *instructions;
+	FunWaitAddr wait_funs;
 } PartProgram;
 
 PartProgram *part_program_empty(void) {
@@ -103,7 +111,7 @@ PartProgram *part_program_empty(void) {
 	return program;
 }
 
-void uxn_part_program_free(PartProgram part_program) {
+void part_program_free(PartProgram part_program) {
 	free(part_program.comments);
 	free(part_program.is_instruction);
 	free(part_program.instructions);
@@ -112,8 +120,8 @@ void uxn_part_program_free(PartProgram part_program) {
 /// Delete of a partial program
 /// This does not delete comments strings because they are string literal
 /// This suppose that partial_program is allocated on the heap
-void uxn_part_program_delete(PartProgram *part_program) {
-	uxn_part_program_free(*part_program);
+void part_program_delete(PartProgram *part_program) {
+	part_program_free(*part_program);
 	free(part_program);
 }
 
@@ -143,8 +151,8 @@ PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 		i++;
 	}
 
-	uxn_part_program_delete(p1);
-	uxn_part_program_delete(p2);
+	part_program_delete(p1);
+	part_program_delete(p2);
 	return res;
 }
 
@@ -219,7 +227,7 @@ void write_part_program(PartProgram part_program, Program *p, uint16_t pos) {
 		p->is_instruction[pos + i] = part_program.is_instruction[i];
 		p->memory[pos + i] = part_program.instructions[i];
 	}
-	uxn_part_program_free(part_program);
+	part_program_free(part_program);
 }
 
 ///// ----- Uxn Program ----- /////
@@ -238,21 +246,21 @@ void uxn_program_delete(Program *program) {
 }
 
 ///// ----- COMPILE ----- /////
-PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
+PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 	switch (expr->tag) {
 	case LET_E: {
 		// Compile the expression
-		PartProgram *let = compile_expr(error, expr->let.e, vars);
+		PartProgram *let = compile_expr(state, expr->let.e);
 		if (let == NULL) {
-			fprintf(error, "Error compiling expr\n");
+			fprintf(state->error, "state->error compiling expr\n");
 			return NULL;
 		}
 
 		// Add the variable to the variable list
-		var_layout_append(vars, expr->let.type, expr->let.var);
+		var_layout_append(&state->vars, expr->let.type, expr->let.var);
 		// Get the address of this new variable
 		VariableInfo var_info =
-		    var_layout_get_addr(vars, expr->let.var);
+		    var_layout_get_addr(&state->vars, expr->let.var);
 
 		// Right now we assume that the value is of size 8 bits
 		append_instruction(let, NULL, LIT);
@@ -270,17 +278,17 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 	case GREATER_THAN_EQUAL_E:
 	case LESS_THAN_E:
 	case LESS_THAN_EQUAL_E: {
-		PartProgram *lhs = compile_expr(error, expr->binary.lhs, vars);
+		PartProgram *lhs = compile_expr(state, expr->binary.lhs);
 		if (lhs == NULL) {
 			break;
 		}
-		PartProgram *rhs = compile_expr(error, expr->binary.rhs, vars);
+		PartProgram *rhs = compile_expr(state, expr->binary.rhs);
 		if (rhs == NULL) {
-			uxn_part_program_delete(lhs);
+			part_program_delete(lhs);
 			break;
 		}
 		PartProgram *add = part_program_empty();
-		append_instruction(add, "Add expression",
+		append_instruction(add, "binary op",
 				   binary_tag_to_instruction(expr->tag));
 		return concat_program(concat_program(lhs, rhs), add);
 	}
@@ -288,12 +296,9 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		PartProgram *sequence = part_program_empty();
 		for (int i = 0; i < expr->sequence.length; i++) {
 			PartProgram *e =
-			    compile_expr(error, &expr->sequence.list[i], vars);
+			    compile_expr(state, &expr->sequence.list[i]);
 			if (e == NULL) {
-				fprintf(error, "Error compiling sequence\n");
-				fprintf_expression(error,
-						   &expr->sequence.list[i]);
-				uxn_part_program_delete(sequence);
+				part_program_delete(sequence);
 				return NULL;
 			}
 			sequence = concat_program(sequence, e);
@@ -304,14 +309,14 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		char *name = expr->assign.var;
 
 		// Compile the expression
-		PartProgram *assign = compile_expr(error, expr->assign.e, vars);
+		PartProgram *assign = compile_expr(state, expr->assign.e);
 		if (assign == NULL) {
-			fprintf(error, "Error compiling expr\n");
+			fprintf(state->error, "state->error compiling expr\n");
 			return NULL;
 		}
 
 		// Get the address of this new variable
-		VariableInfo var_info = var_layout_get_addr(vars, name);
+		VariableInfo var_info = var_layout_get_addr(&state->vars, name);
 
 		// Right now we assume that the value is of size 8 bits
 		append_instruction(assign, NULL, LIT);
@@ -320,13 +325,11 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		return assign;
 	}
 	case DEREF_ASSIGN_E: { // *e1 = e2
-		PartProgram *e1 =
-		    compile_expr(error, expr->deref_assign.e1, vars);
+		PartProgram *e1 = compile_expr(state, expr->deref_assign.e1);
 		if (e1 == NULL) {
 			break;
 		}
-		PartProgram *e2 =
-		    compile_expr(error, expr->deref_assign.e2, vars);
+		PartProgram *e2 = compile_expr(state, expr->deref_assign.e2);
 		if (e2 == NULL) {
 			break;
 		}
@@ -334,13 +337,11 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		return concat_program(e2, e1);
 	}
 	case DEREF_E: { // *e
-		PartProgram *e = compile_expr(error, expr->deref.e, vars);
+		PartProgram *e = compile_expr(state, expr->deref.e);
 		if (e == NULL) {
 			break;
 		}
-
 		append_instruction(e, "Deref", LDZ);
-		// append_intruction();
 		return e;
 	}
 	case VARIABLE_E: {
@@ -348,10 +349,10 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		PartProgram *var = part_program_empty();
 
 		// Get the variable address
-		VariableInfo var_info = var_layout_get_addr(vars, name);
+		VariableInfo var_info = var_layout_get_addr(&state->vars, name);
 		if (!var_info.defined) {
-			fprintf(error, "var '%s' not defined", name);
-			return NULL;
+			fprintf(state->error, "var '%s' not defined\n", name);
+			break;
 		}
 		// Put the address on the stack
 		append_instruction(var, NULL, LIT);
@@ -370,55 +371,71 @@ PartProgram *compile_expr(FILE *error, Expression *expr, VariableLayout *vars) {
 		return number;
 	}
 	case RETURN_E: {
-		fprintf(error, "return todo\n");
+		fprintf(state->error, "return todo\n");
 		break;
 	}
 	case FUNCTION_CALL_E: {
-		fprintf(error, "function call todo\n");
+		fprintf(state->error, "function call todo\n");
 		break;
 	}
 	case CHAR_LITERAL_E: {
 		PartProgram *number = part_program_empty();
 		append_instruction(number, NULL, LIT);
-		append_number(number, "char literal", expr->char_literal.c);
+		append_number(number, NULL, expr->char_literal.c);
 		return number;
 	}
 	case STRING_LITERAL_E: {
-		fprintf(error, "string literal todo\n");
+		fprintf(state->error, "string literal todo\n");
 		break;
 	}
 	case IF_ELSE_E: {
-		PartProgram *cond =
-		    compile_expr(error, expr->if_else.cond, vars);
+		PartProgram *cond = compile_expr(state, expr->if_else.cond);
 		if (cond == NULL) {
-			fprintf(error, "Error compiling condition");
 			break;
 		}
 		PartProgram *if_body =
-		    compile_expr(error, expr->if_else.if_body, vars);
+		    compile_expr(state, expr->if_else.if_body);
 		if (if_body == NULL) {
-			fprintf(error, "Error compiling if_body");
+			part_program_delete(cond);
 			break;
 		}
 		PartProgram *else_body = NULL;
 		if (expr->if_else.else_body != NULL) {
 			else_body =
-			    compile_expr(error, expr->if_else.else_body, vars);
+			    compile_expr(state, expr->if_else.else_body);
 			if (else_body == NULL) {
-				fprintf(error, "Error compiling else_body");
+				part_program_delete(cond);
+				part_program_delete(if_body);
 				break;
 			}
 		}
-		uint16_t size = 0;
-		if (else_body != NULL) {
-			uint16_t size = else_body->length;
-			if_body = concat_program(else_body, if_body);
-			return if_body;
+		if (else_body == NULL) {
+			else_body = part_program_empty();
 		}
-		fprintf(error, "if else todo\n");
-		break;
+		// from cond jump over else or go to else body
+		append_instruction(cond, NULL, LIT);
+		if (else_body->length > 255) {
+			fprintf(state->error, "body else too large (> 255)");
+			break;
+		}
+		append_number(cond, NULL, else_body->length + 3);
+		append_instruction(cond, "if jump", JCN);
+
+		if (if_body->length > 255) {
+			fprintf(state->error, "body if too large (> 255)");
+			break;
+		}
+		// end of else_body jump after if_body
+		append_instruction(else_body, NULL, LIT);
+		append_number(else_body, NULL, if_body->length);
+		append_instruction(else_body, "else body and jump", JMP);
+
+		return concat_program(cond, concat_program(else_body, if_body));
 	}
 	}
+	fprintf(state->error, "state->error compiling: ");
+	fprintf_expression(state->error, expr);
+	fprintf(state->error, "\n");
 	return NULL;
 }
 
@@ -430,8 +447,13 @@ PartProgram compile_function(FILE *error, Function *function) {
 	vars.length = 0;
 	vars.capacity = 0;
 
+	CompilerState state;
+	state.error = error;
+	state.vars = vars;
+
 	PartProgram result;
-	PartProgram *expr = compile_expr(error, function->expr, &vars);
+
+	PartProgram *expr = compile_expr(&state, function->expr);
 	if (expr == NULL) {
 		result.length = 0;
 	} else {
@@ -493,7 +515,8 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 	}
 
 	// 3. Complete Address of functions in the partials programs
-	// BIG TODO
+	// Partial programs that calls other functions contains some waiting
+	// address. They are filled thanks to information from phase 1. and 2.
 	if (func_binary == NULL) {
 		ast_delete(ast);
 		return NULL;

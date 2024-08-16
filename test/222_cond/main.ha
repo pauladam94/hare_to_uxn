@@ -8,6 +8,6 @@ fn main() void = {
 			*out = 48 + 2;
 		};
 	};
-	*out = 'z';
+	*out = 'h';
 	*out = '\n';
 };

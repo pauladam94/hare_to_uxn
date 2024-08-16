@@ -253,12 +253,12 @@ int main(int argc, char **argv) {
 	char command[200];
 
 	/// 1. Assembling the path_dir/code.uxntal file in path_dir/code.rom
-	sprintf(command, "uxn/uxnasm %s/code.uxntal %s/code.rom > %s/uxnasm_result",
+	sprintf(command, "uxnasm %s/code.uxntal %s/code.rom > %s/uxnasm_result",
 		path_dir, path_dir, path_dir);
 	system(command);
 
 	/// 2. Executing path_dir/code.rom, put output in path_dir/output_result
-	sprintf(command, "uxn/uxncli %s/code.rom > %s/output_result", path_dir,
+	sprintf(command, "uxncli %s/code.rom > %s/output_result", path_dir,
 		path_dir);
 	system(command);
 

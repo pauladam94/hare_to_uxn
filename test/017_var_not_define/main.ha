@@ -1,7 +1,7 @@
 fn main() void = {
     let out : u8 = 0x18;
     let a : u8 = 12;
-    if (a > 2) {
+    if (x > 2) {
         *out = 48 + 1;
     } else {
         *out = 48 + 2;
