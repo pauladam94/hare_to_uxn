@@ -34,7 +34,7 @@ void expression_delete(Expression *expr, bool delete_itself) {
 	case NUMBER_E:
 		break;
 	case SEQUENCE_E:
-		for (int i = 0; i < expr->sequence.length; i++) {
+		for (int i = 0; i < expr->sequence.len; i++) {
 			expression_delete(&expr->sequence.list[i], false);
 		}
 		free(expr->sequence.list);
@@ -77,7 +77,7 @@ void expression_delete(Expression *expr, bool delete_itself) {
 
 // Free a complete AST structure
 void ast_delete(Ast *ast) {
-	for (int i = 0; i < ast->length; i++) {
+	for (int i = 0; i < ast->len; i++) {
 		free(ast->functions[i].name);
 		expression_delete(ast->functions[i].expr, true);
 		// free(ast->functions[i].expr);
@@ -88,30 +88,30 @@ void ast_delete(Ast *ast) {
 
 Ast *ast_new(void) {
 	Ast *ast = malloc(sizeof(*ast));
-	ast->length = 0;
-	ast->capacity = 0;
+	ast->len = 0;
+	ast->cap = 0;
 	ast->functions = NULL;
 	return ast;
 }
 
 // function should not be NULL
 void ast_append(Ast *ast, Function function) {
-	ast->length += 1;
-	if (ast->length > ast->capacity) {
-		if (ast->capacity == 0) {
-			ast->capacity = 1;
+	ast->len += 1;
+	if (ast->len > ast->cap) {
+		if (ast->cap == 0) {
+			ast->cap = 1;
 		} else {
-			ast->capacity *= 2;
+			ast->cap *= 2;
 		}
 		Function *previous_functions = ast->functions;
 		ast->functions =
-		    (Function *)malloc(ast->capacity * sizeof(Function));
-		for (int i = 0; i < ast->length - 1; i++) {
+		    (Function *)malloc(ast->cap * sizeof(Function));
+		for (int i = 0; i < ast->len - 1; i++) {
 			ast->functions[i] = previous_functions[i];
 		}
 		free(previous_functions);
 	}
-	ast->functions[ast->length - 1] = function;
+	ast->functions[ast->len - 1] = function;
 }
 
 ///// ----- fprintf FUNCTIONS ----- /////
@@ -248,9 +248,9 @@ void fprintf_expression(FILE *file, Expression *expr) {
 		}
 		break;
 	case SEQUENCE_E:
-		for (int i = 0; i < expr->sequence.length; i++) {
+		for (int i = 0; i < expr->sequence.len; i++) {
 			fprintf_expression(file, &expr->sequence.list[i]);
-			if (i != expr->sequence.length) {
+			if (i != expr->sequence.len) {
 				fprintf(file, ";\n");
 			}
 		}
@@ -304,10 +304,10 @@ void fprintf_expression(FILE *file, Expression *expr) {
 
 void fprintf_function(FILE *file, Function *function) {
 	fprintf(file, "fn %s (", function->name);
-	for (int i = 0; i < function->args.length; i++) {
+	for (int i = 0; i < function->args.len; i++) {
 		fprintf(file, "%s :", function->args.args[i].name);
 		fprintf_program_type(file, &function->args.args[i].type);
-		if (i != function->args.length - 1) {
+		if (i != function->args.len - 1) {
 			fprintf(file, ",");
 		}
 	}
@@ -322,7 +322,7 @@ void fprintf_function(FILE *file, Function *function) {
 // - file name to write the tokens
 // - Ast that is goinf to be written in the file
 void fprintf_ast(FILE *file, Ast *ast) {
-	for (int i = 0; i < ast->length; i++) {
+	for (int i = 0; i < ast->len; i++) {
 		fprintf_function(file, &ast->functions[i]);
 		fprintf(file, "\n");
 	}

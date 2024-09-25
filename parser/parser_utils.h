@@ -48,7 +48,7 @@ typedef struct Expression {
 		} binary;
 		struct { // list[0] ; ... ; list[lenght] ;
 			struct Expression *list;
-			uint16_t length;
+			uint16_t len;
 		} sequence;
 		struct { // var = e
 			char *var;
@@ -73,7 +73,7 @@ typedef struct Expression {
 		} ret;
 		struct { // name ( [arg ,]* arg )
 			char *name;
-			uint8_t length;
+			uint8_t len;
 			struct Expression *args;
 		} function_call;
 		struct {
@@ -99,7 +99,7 @@ typedef struct {
 } Arg;
 
 typedef struct {
-	uint8_t length;
+	uint8_t len;
 	Arg *args;
 } Args;
 
@@ -113,8 +113,8 @@ typedef struct {
 
 typedef struct {
 	Function *functions;
-	uint8_t capacity;
-	uint8_t length;
+	uint8_t len;
+	uint8_t cap;
 } Ast;
 
 typedef struct {

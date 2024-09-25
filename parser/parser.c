@@ -316,7 +316,7 @@ Expression *parse_binary_expr(ParseState *state, bool required) {
 	if (state->abort || expr == NULL) {
 		if (required) {
 			fprintf_line_column(state);
-	 			fprintf(state->error, "Expected an Expression1 \n");
+			fprintf(state->error, "Expected an Expression1 \n");
 		}
 		return NULL;
 	}
@@ -389,21 +389,21 @@ Expression *parse_expr(ParseState *state) {
 		if (expr == NULL) {
 			expr = malloc(sizeof(*expr));
 			expr->tag = SEQUENCE_E;
-			expr->sequence.length = 0;
+			expr->sequence.len = 0;
 			expr->sequence.list = NULL;
 		}
-		expr->sequence.length++;
+		expr->sequence.len++;
 		Expression *prev_list = expr->sequence.list;
-		expr->sequence.list =
-		    malloc(expr->sequence.length * sizeof(Expression));
-		for (int i = 0; i < expr->sequence.length - 1; i++) {
+		expr->sequence.list = malloc(expr->sequence.len *
+					     sizeof(*expr->sequence.list));
+		for (int i = 0; i < expr->sequence.len - 1; i++) {
 			expr->sequence.list[i] = prev_list[i];
 		}
 		if (prev_list != NULL) {
 			free(prev_list);
 		}
 
-		expr->sequence.list[expr->sequence.length - 1] = *expr_next;
+		expr->sequence.list[expr->sequence.len - 1] = *expr_next;
 		free(expr_next);
 	}
 
@@ -422,7 +422,7 @@ Expression *parse_expr(ParseState *state) {
 
 Args parse_args(ParseState *state) {
 	Args args;
-	args.length = 0;
+	args.len = 0;
 	args.args = NULL;
 	while (true) {
 		Arg arg;
@@ -445,10 +445,10 @@ Args parse_args(ParseState *state) {
 			return args;
 		}
 
-		args.length++;
+		args.len++;
 		Arg *prev_args = args.args;
-		args.args = malloc(sizeof(Arg) * args.length);
-		for (int i = 0; i < args.length - 1; i++) {
+		args.args = malloc(sizeof(*args.args) * args.len);
+		for (int i = 0; i < args.len - 1; i++) {
 			args.args[i] = prev_args[i];
 		}
 		if (prev_args != NULL) {
@@ -456,7 +456,7 @@ Args parse_args(ParseState *state) {
 		}
 
 		arg.type = arg_type;
-		args.args[args.length - 1] = arg;
+		args.args[args.len - 1] = arg;
 
 		if (!parse_token_type(state, COMMA, false)) {
 			return args;
@@ -529,7 +529,7 @@ Ast *parse(FILE *error, Tokens *tokens) {
 	state.index = 0;
 	state.abort = false;
 
-	while (state.index < state.tokens->length) {
+	while (state.index < state.tokens->len) {
 		Function *function = parse_function(&state, true);
 		if (state.abort) {
 			return NULL;
@@ -547,7 +547,7 @@ Ast *parse(FILE *error, Tokens *tokens) {
 		}
 	}
 
-	if (state.index != tokens->length) {
+	if (state.index != tokens->len) {
 		ast_delete(ast);
 		ast = NULL;
 	}

@@ -52,8 +52,8 @@ typedef struct {
 
 typedef struct {
 	Token *tokens;
-	uint32_t capacity;
-	uint32_t length;
+	uint32_t cap;
+	uint32_t len;
 } Tokens;
 
 // Input : file name

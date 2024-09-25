@@ -21,6 +21,7 @@ typedef struct {
 
 ///// ----- TOKEN ----- /////
 
+/// Returns a `Token` with only one character given
 Token token_one_char(LexerState *state, TokenType token_type, char c) {
 	Token token;
 	token.line = state->line;
@@ -42,27 +43,10 @@ Token token_only_type(LexerState *state, TokenType token_type) {
 }
 
 Token token_append(Token token, char c) {
-	uint8_t token_length = strlen(token.text);
-
-	// store previous token text
-	char *previous_text = token.text;
-
-	// Allocate one more char
-	// if (token_length == 2) { // TODO REMOVE
-	// 	printf("%s %c\n", token.text, c);
-	// }
-	token.text = (char *)malloc((token_length + 2) * sizeof(char));
-
-	// Reinitialize value according to the previous toke text
-	for (uint32_t i = 0; i < token_length; i++) {
-		token.text[i] = previous_text[i];
-	}
-	if (previous_text != NULL) {
-		free(previous_text);
-	}
-
-	token.text[token_length] = c;
-	token.text[token_length + 1] = 0;
+	uint8_t token_len = strlen(token.text);
+	token.text = realloc(token.text, (token_len + 2) * sizeof(char));
+	token.text[token_len] = c;
+	token.text[token_len + 1] = 0;
 	return token;
 }
 
@@ -192,6 +176,8 @@ void fprintf_token(FILE *file, Token *token) {
 		fprintf_token_type(file, &token->type);
 		break;
 	}
+	// For Debug Purposes
+	// This print the line and column of every token
 	// fprintf(file, "|l: %d|c: %d|t: ", token->line, token->column);
 	// fprintf_token_type(file, &token->type);
 }
@@ -200,41 +186,30 @@ void fprintf_token(FILE *file, Token *token) {
 
 Tokens *tokens_empty(void) {
 	Tokens *result = malloc(sizeof(*result));
-	result->capacity = 0;
-	result->length = 0;
+	result->cap = 0;
+	result->len = 0;
 	result->tokens = NULL;
 	return result;
 }
 
-void tokens_resize(Tokens *tokens) {
-	if (tokens->capacity < tokens->length) {
-		if (tokens->capacity == 0) {
-			tokens->capacity = 1;
-		} else {
-			tokens->capacity *= 2;
-		}
-		// store previous tokens
-		Token *previous_tokens = tokens->tokens;
-		// Allocate to have space according to the capacity
-		tokens->tokens =
-		    (Token *)malloc(tokens->capacity * sizeof(Token));
-		// Reinitialize value according to previous tokens
-		for (uint32_t i = 0; i < tokens->length - 1; i++) {
-			tokens->tokens[i] = previous_tokens[i];
-		}
-		free(previous_tokens);
-	}
-}
-
 // Add one token to the struct tokens
 void tokens_append(Tokens *tokens, Token token) {
-	tokens->length++;
-	tokens_resize(tokens);
-	tokens->tokens[tokens->length - 1] = token;
+	tokens->len++;
+	if (tokens->len >= tokens->cap) {
+		if (tokens->cap == 0) {
+			tokens->cap = 1;
+		} else {
+			tokens->cap *= 2;
+		}
+		tokens->tokens =
+		    realloc(tokens->tokens,
+			    (tokens->cap * 2) * sizeof(*tokens->tokens));
+	}
+	tokens->tokens[tokens->len - 1] = token;
 }
 
 void tokens_delete(Tokens *tokens) {
-	for (uint32_t i = 0; i < tokens->length; i++) {
+	for (uint32_t i = 0; i < tokens->len; i++) {
 		if (tokens->tokens[i].text != NULL) {
 			free(tokens->tokens[i].text);
 		}
@@ -244,7 +219,7 @@ void tokens_delete(Tokens *tokens) {
 }
 
 void fprintf_tokens(FILE *file, Tokens *tokens) {
-	for (uint32_t i = 0; i < tokens->length; i++) {
+	for (uint32_t i = 0; i < tokens->len; i++) {
 		Token *token = &tokens->tokens[i];
 		fprintf_token(file, token);
 		fprintf(file, "\n");

@@ -12,8 +12,8 @@ typedef struct {
 } VariableInfo;
 
 typedef struct {
-	uint8_t capacity;
-	uint8_t length;
+	uint8_t cap;
+	uint8_t len;
 	ProgramType *types;
 	char **names;
 } VariableLayout;
@@ -29,17 +29,17 @@ void var_layout_delete(VariableLayout vars) {
 }
 
 void var_layout_resize(VariableLayout *vars) {
-	if (vars->capacity < vars->length) {
-		if (vars->capacity == 0) {
-			vars->capacity = 1;
+	if (vars->cap < vars->len) {
+		if (vars->cap == 0) {
+			vars->cap = 1;
 		} else {
-			vars->capacity *= 2;
+			vars->cap *= 2;
 		}
 		char **prev_names = vars->names;
 		ProgramType *prev_types = vars->types;
-		vars->names = malloc(sizeof(*vars->names) * vars->capacity);
-		vars->types = malloc(sizeof(*vars->types) * vars->capacity);
-		for (int i = 0; i < vars->length - 1; i++) {
+		vars->names = malloc(sizeof(*vars->names) * vars->cap);
+		vars->types = malloc(sizeof(*vars->types) * vars->cap);
+		for (int i = 0; i < vars->len - 1; i++) {
 			vars->names[i] = prev_names[i];
 			vars->types[i] = prev_types[i];
 		}
@@ -51,16 +51,16 @@ void var_layout_resize(VariableLayout *vars) {
 }
 
 void var_layout_append(VariableLayout *vars, ProgramType type, char *name) {
-	vars->length++;
+	vars->len++;
 	var_layout_resize(vars);
-	vars->names[vars->length - 1] = name;
-	vars->types[vars->length - 1] = type;
+	vars->names[vars->len - 1] = name;
+	vars->types[vars->len - 1] = type;
 }
 
 // This gets the position of the last inserted variable with the name `name`
 VariableInfo var_layout_get_addr(VariableLayout *vars, char *name) {
 	uint8_t addr = 0;
-	for (int i = 0; i < vars->length; i++) {
+	for (int i = 0; i < vars->len; i++) {
 		VariableInfo var_info;
 		if (vars->types[i] == U8_T) {
 			var_info.size = 1;
@@ -83,46 +83,58 @@ VariableInfo var_layout_get_addr(VariableLayout *vars, char *name) {
 ///// ----- PARTIAL PROGRAM ----- /////
 
 typedef struct {
-	uint16_t capacity;
-	uint16_t length;
-	uint16_t *pos_fun;
-	char **waiting_fun;
-} FunWaitAddr;
+	uint16_t cap;
+	uint16_t len;
+	uint16_t *pos; // positions inside of the PartProgram
+	char **names;
+} FunAddr;
 
 /// The partial Uxn Program is used when compiling the AST piece by piece.
 /// At the end of the traversal of the AST, we should assemble all those partial
 /// uxn program to form the final complete uxn program
 typedef struct {
-	uint16_t capacity;
-	uint16_t length;
+	uint16_t cap;
+	uint16_t len;
 	char **comments;
-	bool *is_instruction;
-	Instruction *instructions;
-	FunWaitAddr wait_funs;
+	bool *is_inst;
+	Instruction *inst;
+	FunAddr fun_addr;
 } PartProgram;
 
 PartProgram *part_program_empty(void) {
 	PartProgram *program = malloc(sizeof(*program));
-	program->capacity = 0;
-	program->length = 0;
+	program->cap = 0;
+	program->len = 0;
 	program->comments = NULL;
-	program->is_instruction = NULL;
-	program->instructions = NULL;
+	program->is_inst = NULL;
+	program->inst = NULL;
+
+	FunAddr fun_addr;
+	fun_addr.len = 0;
+	fun_addr.cap = 0;
+	fun_addr.pos = NULL;
+	fun_addr.names = NULL;
+
+	program->fun_addr = fun_addr;
 	return program;
 }
 
-void part_program_free(PartProgram part_program) {
-	free(part_program.comments);
-	free(part_program.is_instruction);
-	free(part_program.instructions);
+void part_program_free(PartProgram p) {
+	// if (p.fun_addr.pos != NULL) {
+	// 	free(p.fun_addr.pos);
+	// 	free(p.fun_addr.names);
+	// }
+	free(p.comments);
+	free(p.is_inst);
+	free(p.inst);
 }
 
 /// Delete of a partial program
 /// This does not delete comments strings because they are string literal
 /// This suppose that partial_program is allocated on the heap
-void part_program_delete(PartProgram *part_program) {
-	part_program_free(*part_program);
-	free(part_program);
+void part_program_delete(PartProgram *p) {
+	part_program_free(*p);
+	free(p);
 }
 
 // Returns a partial uxn program that is a combination of p1 and p2
@@ -130,24 +142,47 @@ void part_program_delete(PartProgram *part_program) {
 PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 	PartProgram *res = malloc(sizeof(*res));
 
-	res->length = p1->length + p2->length;
-	res->capacity = res->length;
+	res->len = p1->len + p2->len;
+	res->cap = res->len;
 
-	res->comments = malloc(sizeof(char *) * res->capacity);
-	res->is_instruction = malloc(sizeof(bool) * res->capacity);
-	res->instructions = malloc(sizeof(Instruction) * res->capacity);
+	res->comments = malloc(sizeof(*res->comments) * res->cap);
+	res->is_inst = malloc(sizeof(*res->is_inst) * res->cap);
+	res->inst = malloc(sizeof(*res->inst) * res->cap);
 
+	// concat memory
 	int i = 0;
-	for (int j = 0; j < p1->length; j++) {
+	for (int j = 0; j < p1->len; j++) {
 		res->comments[i] = p1->comments[j];
-		res->is_instruction[i] = p1->is_instruction[j];
-		res->instructions[i] = p1->instructions[j];
+		res->is_inst[i] = p1->is_inst[j];
+		res->inst[i] = p1->inst[j];
 		i++;
 	}
-	for (int j = 0; j < p2->length; j++) {
+	for (int j = 0; j < p2->len; j++) {
 		res->comments[i] = p2->comments[j];
-		res->is_instruction[i] = p2->is_instruction[j];
-		res->instructions[i] = p2->instructions[j];
+		res->is_inst[i] = p2->is_inst[j];
+		res->inst[i] = p2->inst[j];
+		i++;
+	}
+
+	// concat fun_wait
+	res->fun_addr.len = p1->fun_addr.len + p2->fun_addr.len;
+	res->fun_addr.cap = res->fun_addr.len;
+	if (res->fun_addr.cap != 0) {
+		res->fun_addr.pos =
+		    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
+		res->fun_addr.pos =
+		    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
+	}
+	i = 0;
+	for (int j = 0; j < p1->fun_addr.len - 1; j++) {
+		res->fun_addr.pos[i] = p1->fun_addr.pos[j];
+		res->fun_addr.names[i] = p1->fun_addr.names[j];
+		i++;
+	}
+	for (int j = 0; j < p2->fun_addr.len - 1; j++) {
+		// offset of p1->len because fun_addr are positional
+		res->fun_addr.pos[i] = p2->fun_addr.pos[j] + p1->len;
+		res->fun_addr.names[i] = p2->fun_addr.names[j];
 		i++;
 	}
 
@@ -157,24 +192,24 @@ PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 }
 
 void part_program_resize(PartProgram *p) {
-	if (p->capacity < p->length) {
-		if (p->capacity == 0) {
-			p->capacity = 2;
+	if (p->cap < p->len) {
+		if (p->cap == 0) {
+			p->cap = 2;
 		} else {
-			p->capacity *= 2;
+			p->cap *= 2;
 		}
 		char **prev_comments = p->comments;
-		bool *prev_is_instruction = p->is_instruction;
-		Instruction *prev_instructions = p->instructions;
+		bool *prev_is_instruction = p->is_inst;
+		Instruction *prev_instructions = p->inst;
 
-		p->comments = malloc(sizeof(char *) * p->capacity);
-		p->is_instruction = malloc(sizeof(bool) * p->capacity);
-		p->instructions = malloc(sizeof(Instruction) * p->capacity);
+		p->comments = malloc(sizeof(*p->comments) * p->cap);
+		p->is_inst = malloc(sizeof(*p->inst) * p->cap);
+		p->inst = malloc(sizeof(*p->inst) * p->cap);
 
-		for (int i = 0; i < p->length - 1; i++) {
+		for (int i = 0; i < p->len - 1; i++) {
 			p->comments[i] = prev_comments[i];
-			p->is_instruction[i] = prev_is_instruction[i];
-			p->instructions[i] = prev_instructions[i];
+			p->is_inst[i] = prev_is_instruction[i];
+			p->inst[i] = prev_instructions[i];
 		}
 		if (prev_comments != NULL) {
 			free(prev_comments);
@@ -184,48 +219,80 @@ void part_program_resize(PartProgram *p) {
 	}
 }
 
+void fun_wait_addr_resize(FunAddr *fun_wait) {
+	if (fun_wait->cap < fun_wait->len) {
+		if (fun_wait->cap == 0) {
+			fun_wait->cap = 1;
+		} else {
+			fun_wait->cap *= 2;
+		}
+		char **prev_names = fun_wait->names;
+		uint16_t *prev_positions = fun_wait->pos;
+
+		fun_wait->names = malloc(sizeof(char *) * fun_wait->cap);
+		fun_wait->pos = malloc(sizeof(uint16_t) * fun_wait->cap);
+
+		for (int i = 0; i < fun_wait->len - 1; i++) {
+			fun_wait->names[i] = prev_names[i];
+			fun_wait->pos[i] = prev_positions[i];
+		}
+		if (prev_names != NULL) {
+			free(prev_names);
+			free(prev_positions);
+		}
+	}
+}
+
+void append_function_addr(PartProgram *p, char *name) {
+	p->fun_addr.len++;
+	fun_wait_addr_resize(&p->fun_addr);
+	p->fun_addr.names[p->fun_addr.len - 1] = name;
+	p->fun_addr.pos[p->fun_addr.len - 1] = p->fun_addr.len;
+}
+
 // add to the program 'p' (in place) one instruction which has
 // instruction, is_intruction, comment to describe it
 void append_number(PartProgram *p, char *comment, uint16_t n) {
 	if (n < 0x1000) {
-		p->length++;
+		p->len++;
 		part_program_resize(p);
 
-		p->comments[p->length - 1] = comment;
-		p->is_instruction[p->length - 1] = false;
+		p->comments[p->len - 1] = comment;
+		p->is_inst[p->len - 1] = false;
 
-		p->instructions[p->length - 1] = n;
+		p->inst[p->len - 1] = n;
 	} else {
-		p->length += 2;
+		// TODO the right calculus
+		p->len += 2;
 		part_program_resize(p);
-		p->comments[p->length - 2] = comment;
-		p->is_instruction[p->length - 2] = false;
-		p->is_instruction[p->length - 1] = false;
+		p->comments[p->len - 2] = comment;
+		p->is_inst[p->len - 2] = false;
+		p->is_inst[p->len - 1] = false;
 
-		p->instructions[p->length - 2] = n;
-		p->instructions[p->length - 1] = n;
+		p->inst[p->len - 2] = n % 0x1000;
+		p->inst[p->len - 1] = n;
 	}
 }
 
 // add to the program 'p' (in place) one instruction which has
 // instruction, is_intruction, comment to describe it
 void append_instruction(PartProgram *p, char *comment, Instruction inst) {
-	p->length++;
+	p->len++;
 	part_program_resize(p);
 
-	p->comments[p->length - 1] = comment;
-	p->is_instruction[p->length - 1] = true;
-	p->instructions[p->length - 1] = inst;
+	p->comments[p->len - 1] = comment;
+	p->is_inst[p->len - 1] = true;
+	p->inst[p->len - 1] = inst;
 }
 
 /// Write a partial function to an UxnProgram a a certain 'pos'
 /// This functions delete PartialUxnProgram
 void write_part_program(PartProgram part_program, Program *p, uint16_t pos) {
-	for (uint16_t i = 0; i < part_program.length; i++) {
+	for (uint16_t i = 0; i < part_program.len; i++) {
 		p->comments[pos + i] = part_program.comments[i];
 		p->is_written[pos + i] = true;
-		p->is_instruction[pos + i] = part_program.is_instruction[i];
-		p->memory[pos + i] = part_program.instructions[i];
+		p->is_instruction[pos + i] = part_program.is_inst[i];
+		p->memory[pos + i] = part_program.inst[i];
 	}
 	part_program_free(part_program);
 }
@@ -252,7 +319,7 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		// Compile the expression
 		PartProgram *let = compile_expr(state, expr->let.e);
 		if (let == NULL) {
-			fprintf(state->error, "state->error compiling expr\n");
+			fprintf(state->error, "compiling expr\n");
 			return NULL;
 		}
 
@@ -294,7 +361,7 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 	}
 	case SEQUENCE_E: {
 		PartProgram *sequence = part_program_empty();
-		for (int i = 0; i < expr->sequence.length; i++) {
+		for (int i = 0; i < expr->sequence.len; i++) {
 			PartProgram *e =
 			    compile_expr(state, &expr->sequence.list[i]);
 			if (e == NULL) {
@@ -311,7 +378,7 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		// Compile the expression
 		PartProgram *assign = compile_expr(state, expr->assign.e);
 		if (assign == NULL) {
-			fprintf(state->error, "state->error compiling expr\n");
+			fprintf(state->error, "compiling expr\n");
 			return NULL;
 		}
 
@@ -375,8 +442,13 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		break;
 	}
 	case FUNCTION_CALL_E: {
+		PartProgram *p = part_program_empty();
+		// Ajout de l'adresse actuelle( + 1) sur la return stack
+		// JMP
+		// Addresse de la function expr->fun_call.name
+		// Ajout 
 		fprintf(state->error, "function call todo\n");
-		break;
+		return p;
 	}
 	case CHAR_LITERAL_E: {
 		PartProgram *number = part_program_empty();
@@ -414,26 +486,25 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		}
 		// from cond jump over else or go to else body
 		append_instruction(cond, NULL, LIT);
-		if (else_body->length > 255) {
+		if (else_body->len > 255) {
 			fprintf(state->error, "body else too large (> 255)");
 			break;
 		}
-		append_number(cond, NULL, else_body->length + 3);
+		append_number(cond, NULL, else_body->len + 3);
 		append_instruction(cond, "if jump", JCN);
 
-		if (if_body->length > 255) {
+		if (if_body->len > 255) {
 			fprintf(state->error, "body if too large (> 255)");
 			break;
 		}
 		// end of else_body jump after if_body
 		append_instruction(else_body, NULL, LIT);
-		append_number(else_body, NULL, if_body->length);
+		append_number(else_body, NULL, if_body->len);
 		append_instruction(else_body, "else body and jump", JMP);
-
 		return concat_program(cond, concat_program(else_body, if_body));
 	}
 	}
-	fprintf(state->error, "state->error compiling: ");
+	fprintf(state->error, "compiling: ");
 	fprintf_expression(state->error, expr);
 	fprintf(state->error, "\n");
 	return NULL;
@@ -444,8 +515,8 @@ PartProgram compile_function(FILE *error, Function *function) {
 	VariableLayout vars;
 	vars.names = NULL;
 	vars.types = NULL;
-	vars.length = 0;
-	vars.capacity = 0;
+	vars.len = 0;
+	vars.cap = 0;
 
 	CompilerState state;
 	state.error = error;
@@ -455,7 +526,7 @@ PartProgram compile_function(FILE *error, Function *function) {
 
 	PartProgram *expr = compile_expr(&state, function->expr);
 	if (expr == NULL) {
-		result.length = 0;
+		result.len = 0;
 	} else {
 		result = *expr;
 		free(expr);
@@ -466,7 +537,7 @@ PartProgram compile_function(FILE *error, Function *function) {
 
 Program *compile_to_uxn(FILE *error, Ast *ast) {
 	// No functions => stop
-	if (ast->length == 0) {
+	if (ast->len == 0) {
 		ast_delete(ast);
 		return NULL;
 	}
@@ -474,7 +545,7 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 	// Get the 'main' if there is one else stop the compilation
 	bool found_main = false;
 	int index_main = 0;
-	for (int i = 0; i < ast->length; i++) {
+	for (int i = 0; i < ast->len; i++) {
 		if (strcmp(ast->functions[i].name, "main") == 0) {
 			found_main = true;
 			index_main = i;
@@ -487,14 +558,14 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 		return NULL;
 	}
 
-	PartProgram *func_binary = malloc(sizeof(*func_binary) * ast->length);
-	uint16_t *func_pos = malloc(sizeof(*func_pos) * ast->length);
+	PartProgram *func_binary = malloc(sizeof(*func_binary) * ast->len);
+	uint16_t *func_pos = malloc(sizeof(*func_pos) * ast->len);
 	func_pos[index_main] = 0x100;
 
 	// 1. Compile the different function
-	for (int i = 0; i < ast->length; i++) {
+	for (int i = 0; i < ast->len; i++) {
 		PartProgram func = compile_function(error, &ast->functions[i]);
-		if (func.length == 0) {
+		if (func.len == 0) {
 			fprintf(error, "Error compiling function '%s'",
 				ast->functions[i].name);
 			ast_delete(ast);
@@ -505,12 +576,12 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 
 	// 2. Compute the positions of every functions
 	uint16_t pos = 0x100;
-	pos += func_binary[index_main].length;
-	for (int i = 0; i < ast->length; i++) {
+	pos += func_binary[index_main].len;
+	for (int i = 0; i < ast->len; i++) {
 		if (i == index_main) {
 			break;
 		}
-		pos += func_binary[i].length;
+		pos += func_binary[i].len;
 		func_pos[i] = pos;
 	}
 
@@ -531,7 +602,7 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 		program->is_instruction[i] = false; // not useful
 		program->memory[i] = BRK;	    // not useful
 	}
-	for (int i = 0; i < ast->length; i++) {
+	for (int i = 0; i < ast->len; i++) {
 		write_part_program(func_binary[i], program, func_pos[i]);
 	}
 
