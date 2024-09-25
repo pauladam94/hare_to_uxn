@@ -98,18 +98,9 @@ Ast *ast_new(void) {
 void ast_append(Ast *ast, Function function) {
 	ast->len += 1;
 	if (ast->len > ast->cap) {
-		if (ast->cap == 0) {
-			ast->cap = 1;
-		} else {
-			ast->cap *= 2;
-		}
-		Function *previous_functions = ast->functions;
-		ast->functions =
-		    (Function *)malloc(ast->cap * sizeof(Function));
-		for (int i = 0; i < ast->len - 1; i++) {
-			ast->functions[i] = previous_functions[i];
-		}
-		free(previous_functions);
+		ast->cap = (ast->cap == 0) ? 1 : ast->cap * 2;
+		ast->functions = (Function *)realloc(
+		    ast->functions, ast->cap * sizeof(Function));
 	}
 	ast->functions[ast->len - 1] = function;
 }

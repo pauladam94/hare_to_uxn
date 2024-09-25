@@ -30,23 +30,11 @@ void var_layout_delete(VariableLayout vars) {
 
 void var_layout_resize(VariableLayout *vars) {
 	if (vars->cap < vars->len) {
-		if (vars->cap == 0) {
-			vars->cap = 1;
-		} else {
-			vars->cap *= 2;
-		}
-		char **prev_names = vars->names;
-		ProgramType *prev_types = vars->types;
-		vars->names = malloc(sizeof(*vars->names) * vars->cap);
-		vars->types = malloc(sizeof(*vars->types) * vars->cap);
-		for (int i = 0; i < vars->len - 1; i++) {
-			vars->names[i] = prev_names[i];
-			vars->types[i] = prev_types[i];
-		}
-		if (prev_names != NULL) {
-			free(prev_names);
-			free(prev_types);
-		}
+		vars->cap = (vars->cap == 0) ? 1 : vars->cap * 2;
+		vars->names =
+		    realloc(vars->names, vars->cap * sizeof(*vars->names));
+		vars->types =
+		    realloc(vars->types, vars->cap * sizeof(*vars->types));
 	}
 }
 
@@ -149,31 +137,26 @@ PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 	res->is_inst = malloc(sizeof(*res->is_inst) * res->cap);
 	res->inst = malloc(sizeof(*res->inst) * res->cap);
 
-	// concat memory
-	int i = 0;
-	for (int j = 0; j < p1->len; j++) {
-		res->comments[i] = p1->comments[j];
-		res->is_inst[i] = p1->is_inst[j];
-		res->inst[i] = p1->inst[j];
-		i++;
-	}
-	for (int j = 0; j < p2->len; j++) {
-		res->comments[i] = p2->comments[j];
-		res->is_inst[i] = p2->is_inst[j];
-		res->inst[i] = p2->inst[j];
-		i++;
-	}
+	// Concat Memory
+	// res : p1 ++ p2
+	memcpy(res->comments, p1->comments, p1->len * sizeof(*res->comments));
+	memcpy(res->is_inst, p1->is_inst, p1->len * sizeof(*res->is_inst));
+	memcpy(res->inst, p1->inst, p1->len * sizeof(*res->inst));
+	memcpy(res->comments + p1->len, p2->comments,
+	       p2->len * sizeof(*res->comments));
+	memcpy(res->is_inst + p1->len, p2->is_inst,
+	       p2->len * sizeof(*res->is_inst));
+	memcpy(res->inst + p1->len, p2->inst, p2->len * sizeof(*res->inst));
 
 	// concat fun_wait
 	res->fun_addr.len = p1->fun_addr.len + p2->fun_addr.len;
 	res->fun_addr.cap = res->fun_addr.len;
-	if (res->fun_addr.cap != 0) {
-		res->fun_addr.pos =
-		    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
-		res->fun_addr.pos =
-		    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
-	}
-	i = 0;
+	res->fun_addr.pos =
+	    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
+	res->fun_addr.pos =
+	    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
+	
+	int i = 0;
 	for (int j = 0; j < p1->fun_addr.len - 1; j++) {
 		res->fun_addr.pos[i] = p1->fun_addr.pos[j];
 		res->fun_addr.names[i] = p1->fun_addr.names[j];
@@ -193,53 +176,21 @@ PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 
 void part_program_resize(PartProgram *p) {
 	if (p->cap < p->len) {
-		if (p->cap == 0) {
-			p->cap = 2;
-		} else {
-			p->cap *= 2;
-		}
-		char **prev_comments = p->comments;
-		bool *prev_is_instruction = p->is_inst;
-		Instruction *prev_instructions = p->inst;
-
-		p->comments = malloc(sizeof(*p->comments) * p->cap);
-		p->is_inst = malloc(sizeof(*p->inst) * p->cap);
-		p->inst = malloc(sizeof(*p->inst) * p->cap);
-
-		for (int i = 0; i < p->len - 1; i++) {
-			p->comments[i] = prev_comments[i];
-			p->is_inst[i] = prev_is_instruction[i];
-			p->inst[i] = prev_instructions[i];
-		}
-		if (prev_comments != NULL) {
-			free(prev_comments);
-			free(prev_is_instruction);
-			free(prev_instructions);
-		}
+		p->cap = (p->cap == 0) ? 1 : p->cap * 2;
+		p->comments =
+		    realloc(p->comments, sizeof(*p->comments) * p->cap);
+		p->is_inst = realloc(p->is_inst, sizeof(*p->inst) * p->cap);
+		p->inst = realloc(p->inst, sizeof(*p->inst) * p->cap);
 	}
 }
 
 void fun_wait_addr_resize(FunAddr *fun_wait) {
 	if (fun_wait->cap < fun_wait->len) {
-		if (fun_wait->cap == 0) {
-			fun_wait->cap = 1;
-		} else {
-			fun_wait->cap *= 2;
-		}
-		char **prev_names = fun_wait->names;
-		uint16_t *prev_positions = fun_wait->pos;
-
-		fun_wait->names = malloc(sizeof(char *) * fun_wait->cap);
-		fun_wait->pos = malloc(sizeof(uint16_t) * fun_wait->cap);
-
-		for (int i = 0; i < fun_wait->len - 1; i++) {
-			fun_wait->names[i] = prev_names[i];
-			fun_wait->pos[i] = prev_positions[i];
-		}
-		if (prev_names != NULL) {
-			free(prev_names);
-			free(prev_positions);
-		}
+		fun_wait->cap = (fun_wait == 0) ? 1 : fun_wait->cap * 2;
+		fun_wait->names =
+		    realloc(fun_wait->names, sizeof(char *) * fun_wait->cap);
+		fun_wait->pos =
+		    realloc(fun_wait->pos, sizeof(uint16_t) * fun_wait->cap);
 	}
 }
 
@@ -446,7 +397,7 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		// Ajout de l'adresse actuelle( + 1) sur la return stack
 		// JMP
 		// Addresse de la function expr->fun_call.name
-		// Ajout 
+		// Ajout
 		fprintf(state->error, "function call todo\n");
 		return p;
 	}

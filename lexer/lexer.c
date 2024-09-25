@@ -196,14 +196,9 @@ Tokens *tokens_empty(void) {
 void tokens_append(Tokens *tokens, Token token) {
 	tokens->len++;
 	if (tokens->len >= tokens->cap) {
-		if (tokens->cap == 0) {
-			tokens->cap = 1;
-		} else {
-			tokens->cap *= 2;
-		}
-		tokens->tokens =
-		    realloc(tokens->tokens,
-			    (tokens->cap * 2) * sizeof(*tokens->tokens));
+		tokens->cap = (tokens->cap == 0) ? 1 : tokens->cap * 2;
+		tokens->tokens = realloc(tokens->tokens,
+					 tokens->cap * sizeof(*tokens->tokens));
 	}
 	tokens->tokens[tokens->len - 1] = token;
 }
