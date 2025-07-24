@@ -1,4 +1,4 @@
-.DELETE_ON_ERROR: # don't create file when there is an error
+.ELETE_ON_ERROR: # don't create file when there is an error
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 CC = clang

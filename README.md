@@ -40,7 +40,7 @@ at the end of `test.c` durint the execution phase.
 To check the number of C line code `git ls-files '*.c' '*.h' | xargs wc -l`.
 
 # Memory Leak
-- None in lexer, parser or compiler
+- None in lexer, parser for now (some in the compiler)
 
 # TODO
 - weird error 220 missing ; at lign 0 column 0; (end of function);

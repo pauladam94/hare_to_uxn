@@ -155,7 +155,7 @@ PartProgram *concat_program(PartProgram *p1, PartProgram *p2) {
 	    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
 	res->fun_addr.pos =
 	    malloc(sizeof(*res->fun_addr.pos) * res->fun_addr.cap);
-	
+
 	int i = 0;
 	for (int j = 0; j < p1->fun_addr.len - 1; j++) {
 		res->fun_addr.pos[i] = p1->fun_addr.pos[j];
@@ -398,6 +398,7 @@ PartProgram *compile_expr(CompilerState *state, Expression *expr) {
 		// JMP
 		// Addresse de la function expr->fun_call.name
 		// Ajout
+		append_number(p, "Function Call", 0);
 		fprintf(state->error, "function call todo\n");
 		return p;
 	}
@@ -487,7 +488,7 @@ PartProgram compile_function(FILE *error, Function *function) {
 }
 
 Program *compile_to_uxn(FILE *error, Ast *ast) {
-	// No functions => stop
+	// No functions then we stop
 	if (ast->len == 0) {
 		ast_delete(ast);
 		return NULL;
@@ -530,7 +531,7 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 	pos += func_binary[index_main].len;
 	for (int i = 0; i < ast->len; i++) {
 		if (i == index_main) {
-			break;
+			continue;
 		}
 		pos += func_binary[i].len;
 		func_pos[i] = pos;
@@ -542,6 +543,8 @@ Program *compile_to_uxn(FILE *error, Ast *ast) {
 	if (func_binary == NULL) {
 		ast_delete(ast);
 		return NULL;
+	}
+	for (int i = 0; i < ast->len; i++) {
 	}
 
 	// 4. Write all functions in the complete program

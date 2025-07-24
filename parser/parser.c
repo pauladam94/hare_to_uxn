@@ -69,20 +69,18 @@ Expression *parse_number(ParseState *state) {
 	    state->tokens->tokens[state->index].text[0] == '0') {
 		char *prev_text = current_token(state).text;
 		state->index++;
-		int i;
+		uint32_t i;
 		Expression *e = malloc(sizeof(*e));
 		// TODO check more things if this really a number
 
 		if (current_token(state).type == IDENTIFIER &&
 		    current_token(state).text[0] == 'x' &&
-		    sscanf(current_token(state).text + 1, "%x", &i) != EOF
-
-		) {
+		    sscanf(current_token(state).text + 1, "%x", &i) != EOF) {
 			free(prev_text);
 			free(current_token(state).text);
 			state->index++;
 			e->tag = NUMBER_E;
-			e->number.value = (uint32_t)i;
+			e->number.value = i;
 			e->number.is_written_in_hexa = true;
 			return e;
 		}
@@ -394,8 +392,8 @@ Expression *parse_expr(ParseState *state) {
 		}
 		expr->sequence.len++;
 		Expression *prev_list = expr->sequence.list;
-		expr->sequence.list = malloc(expr->sequence.len *
-					     sizeof(*expr->sequence.list));
+		expr->sequence.list =
+		    malloc(expr->sequence.len * sizeof(*expr->sequence.list));
 		for (int i = 0; i < expr->sequence.len - 1; i++) {
 			expr->sequence.list[i] = prev_list[i];
 		}

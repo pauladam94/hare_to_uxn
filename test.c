@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
 
 	char *path_dir = argv[1];
 	blue();
-	printf("[%-20.20s]", path_dir + 5);
+	printf("[%-19.19s]", path_dir + 5);
 	reset();
 	fflush(stdout);
 

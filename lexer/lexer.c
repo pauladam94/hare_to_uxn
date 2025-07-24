@@ -428,6 +428,7 @@ Token next_token(LexerState *state, char *c) {
 			*c = next_char(state);
 			return token_only_type(state, NOT_EQUAL);
 		}
+		break;
 	case '+':
 		token = token_only_type(state, PLUS);
 		break;
